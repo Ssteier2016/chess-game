@@ -3,3 +3,4 @@ flask-socketio
 bcrypt
 eventlet
 gunicorn
+mercadopago
