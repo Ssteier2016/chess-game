@@ -26,7 +26,7 @@ const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
-const mp = new MercadoPago('TEST-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' }); // Clave de test
+const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' }); // Clave de test
 
 // Funciones de Interfaz y Juego
 function joinRoom() {
@@ -47,6 +47,30 @@ function joinRoom() {
 
     console.log(`Intentando unirse a la sala: ${room}, apuesta: ${enableBet ? betAmount : 'sin apuesta'}`);
     socket.emit('join', { room, timer, color, bet: betAmount, enableBet });
+}
+
+function playWithBot() {
+    socket.emit('play_with_bot', {});
+    console.log('Iniciando partida contra bot');
+}
+
+function renderOnlinePlayers(players) {
+    const onlineDiv = document.getElementById('online-players');
+    onlineDiv.innerHTML = '<h3>Jugadores en Línea</h3>';
+    players.forEach(player => {
+        const p = document.createElement('p');
+        p.textContent = player.username; // Simplificado, avatar no se muestra como texto
+        onlineDiv.appendChild(p);
+    });
+}
+
+function sendGlobalMessage() {
+    const input = document.getElementById('global-chat-input');
+    const message = input.value.trim();
+    if (message) {
+        socket.emit('global_message', { message });
+        input.value = '';
+    }
 }
 
 function joinWaitlist() {
@@ -274,7 +298,7 @@ function startVideoCall() {
             document.getElementById('local-video').style.display = 'block';
             document.getElementById('start-video').style.display = 'none';
             document.getElementById('stop-video').style.display = 'inline';
-            peer = new SimplePeer({ initiator: true, stream });
+            peer = new SimplePeer({ initiator: !room.includes('bot'), stream }); // Bot no inicia videollamada
             peer.on('signal', data => {
                 console.log('Enviando señal WebRTC:', data);
                 socket.emit('video_signal', { room, signal: data });
@@ -288,7 +312,7 @@ function startVideoCall() {
         })
         .catch(err => {
             console.error('Error al iniciar videollamada:', err);
-            alert('No se pudo acceder a la cámara/micrófono. Asegurate de dar permisos.');
+            alert('No se pudo iniciar la videollamada. Asegurate de dar permisos.');
         });
 }
 
@@ -388,6 +412,31 @@ function acceptConditions() {
 
 // Eventos Socket.IO
 socket.on('connect', () => console.log('Conectado al servidor'));
+
+socket.on('online_players_update', (players) => {
+    renderOnlinePlayers(players);
+});
+
+socket.on('global_message', (data) => {
+    const globalChat = document.getElementById('global-chat');
+    const msg = document.createElement('div');
+    msg.textContent = `${data.username}: ${data.message}`;
+    globalChat.appendChild(msg);
+    globalChat.scrollTop = globalChat.scrollHeight;
+});
+
+socket.on('deposit_url', (data) => {
+    mp.checkout({
+        preference: { id: data.preference_id },
+        autoOpen: true,
+        onClose: () => socket.emit('check_deposit', { preference_id: data.preference_id })
+    });
+});
+
+socket.on('withdraw_success', (data) => {
+    alert(`Retiro exitoso: $${data.amount} ARS transferidos.`);
+    updateWalletBalance(0);
+});
 
 socket.on('color_assigned', (data) => {
     myColor = data.color;
@@ -548,20 +597,6 @@ socket.on('game_loaded', (data) => {
 });
 
 socket.on('wallet_update', (data) => updateWalletBalance(data.balance));
-
-socket.on('deposit_url', (data) => {
-    mp.checkout({
-        preference: { id: data.preference_id },
-        autoOpen: true,
-        onClose: () => socket.emit('check_deposit', { preference_id: data.preference_id })
-    });
-    console.log('URL de depósito recibida:', data.preference_id);
-});
-
-socket.on('withdraw_success', (data) => {
-    alert(`Retiro exitoso: $${data.amount} ARS transferidos a tu MercadoPago.`);
-    updateWalletBalance(0);
-});
 
 socket.on('bet_accepted', (data) => {
     alert(data.bet > 0 ? `Apuesta de $${data.bet} ARS aceptada por ambos jugadores en la sala ${room}.` : `Partida sin apuesta iniciada en la sala ${room}.`);

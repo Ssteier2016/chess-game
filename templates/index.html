@@ -349,6 +349,58 @@
             display: block;
             margin: 10px auto;
         }
+        /* Nuevos estilos movidos fuera del @media */
+        #online-players {
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 3px solid #8b5a2b;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            font-family: 'Junicode', sans-serif;
+        }
+        #online-players h3 {
+            margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px #000;
+        }
+        #online-players p {
+            margin: 5px 0;
+            color: #d4af37;
+        }
+        #global-chat {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5dc;
+            border: 3px solid #4a2c1a;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            color: #000;
+            font-family: 'Junicode', sans-serif;
+        }
+        #global-chat-input {
+            width: 70%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            font-family: 'Junicode', sans-serif;
+        }
+        #global-chat button, #play-with-bot {
+            padding: 10px 20px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Junicode', sans-serif;
+            margin: 5px;
+        }
+        /* Media queries */
         @media (max-width: 700px) {
             .container {
                 width: 100%;
@@ -427,6 +479,13 @@
             #private-chat input, #private-chat button {
                 width: 90%;
             }
+            /* Ajustes para nuevos elementos en pantallas pequeñas */
+            #global-chat-input {
+                width: 60%;
+            }
+            #global-chat button, #play-with-bot {
+                padding: 8px 15px;
+            }
         }
     </style>
 </head>
@@ -478,6 +537,8 @@
             <input type="text" id="room-id" placeholder="ID de la sala">
             <select id="timer-select">
                 <option value="0">Sin temporizador</option>
+                <option value="1">1 minuto</option>
+                <option value="3">3 minutos</option>
                 <option value="5">5 minutos</option>
                 <option value="10">10 minutos</option>
                 <option value="15">15 minutos</option>
@@ -488,8 +549,20 @@
             <input type="number" id="bet-amount" placeholder="Apuesta ($ARS)" min="100" step="50">
             <button onclick="joinRoom()">Unirse</button>
             <button onclick="joinWaitlist()">Esperar Oponente</button>
+            <button id="play-with-bot" onclick="playWithBot()">Jugar con Bot</button>
             <button id="load-button" onclick="loadSavedGames()">Cargar partida</button>
             <div id="saved-games"></div>
+        </div>
+        <div id="online-players">
+            <h3>Jugadores en Línea</h3>
+            <!-- Lista de jugadores se llenará dinámicamente -->
+        </div>
+        <div id="global-chat">
+            <!-- Mensajes globales se llenarán dinámicamente -->
+        </div>
+        <div>
+            <input id="global-chat-input" type="text" placeholder="Chat global">
+            <button id="global-chat-send" onclick="sendGlobalMessage()">Enviar</button>
         </div>
         <div class="wallet-section">
             <h2>Billetera</h2>
@@ -526,6 +599,7 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
+<script src="https://unpkg.com/simple-peer@9.11.0/simplepeer.min.js"></script>
     <script src="/static/game.js"></script>
     <script>
         function previewAvatar(event) {

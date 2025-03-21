@@ -1,6 +1,6 @@
+import os
 import eventlet
 eventlet.monkey_patch()  # Aplicar monkey patch primero
-
 from flask import Flask, render_template, jsonify, request, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import mercadopago
@@ -9,21 +9,22 @@ import bcrypt
 import json
 import time
 import colorsys
-import os
+import chess
 
 # Configuración Inicial
 app = Flask(__name__)
-app.secret_key = 'Ma730yIan'  # Cambia esto por una clave secreta fuerte
+app.secret_key = os.getenv("SECRET_HEY", "Ma730yIan")  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
-sdk = mercadopago.SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN", "APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132"))  # Access Token
+
+DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
+sdk = mercadopago.SDK("APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132") # Access Token
 
 # Variables Globales
 players = {}  # {room: {sid: {'color': str, 'chosen_color': str, 'bet': int, 'enable_bet': bool}}}
 games = {}  # {room: {'board': list, 'turn': str, 'time_white': float, 'time_black': float, 'last_move_time': float}}
 wallets = {}  # {sid: float}
+online_players = {}  # Lista de jugadores en línea
 available_players = {}  # {sid: {'username': str, 'chosen_color': str}}
-
-DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
 
 initial_board = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -171,8 +172,46 @@ def update_timer(room):
             reset_board(room)
             if room in players:
                 del players[room]
+                
+def init_db():
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password BLOB, avatar TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS saved_games (username TEXT, room TEXT, game_name TEXT, board TEXT, turn TEXT)''')
+    conn.commit()
+    conn.close()
 
+init_db()
 # Rutas HTTP
+
+@app.route('/deposit_request', methods=['POST'])
+def deposit_request():
+    if 'username' not in session:
+        return jsonify({'error': 'No autenticado'}), 401
+    data = request.get_json()
+    amount = data.get('amount', 0)
+    preference = {
+        "items": [{"title": "Recarga PeonkinGame", "quantity": 1, "currency_id": "ARS", "unit_price": float(amount)}],
+        "back_urls": {"success": "https://peonkingame.onrender.com", "failure": "https://peonkingame.onrender.com", "pending": "https://peonkingame.onrender.com"},
+        "auto_return": "approved"
+    }
+    result = sdk.preference().create(preference)
+    emit('deposit_url', {'preference_id': result['response']['id']}, to=request.sid)
+    return jsonify({'success': True})
+
+@app.route('/withdraw_request', methods=['POST'])
+def withdraw_request():
+    if 'username' not in session:
+        return jsonify({'error': 'No autenticado'}), 401
+    data = request.get_json()
+    amount = data.get('amount', 0)
+    username = session['username']
+    if wallets.get(request.sid, 0) >= amount:
+        wallets[request.sid] -= amount
+        emit('withdraw_success', {'amount': amount}, to=request.sid)
+        emit('wallet_update', {'balance': wallets[request.sid]}, to=request.sid)
+        return jsonify({'success': True})
+    return jsonify({'error': 'Fondos insuficientes'}), 400
 
 @app.route('/success')
 def success():
@@ -250,7 +289,10 @@ def on_connect():
     sid = request.sid
     print(f"Cliente conectado: {sid}")
     if sid not in wallets:
-        wallets[sid] = 0  # Inicializar billetera solo cuando un cliente se conecta
+        wallets[sid] = 0
+    if 'username' in session:
+        online_players[sid] = {'username': session['username'], 'avatar': session.get('avatar', 'default-avatar.png')}
+        emit('online_players_update', list(online_players.values()), broadcast=True)  # Inicializar billetera solo cuando un cliente se conecta
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -268,8 +310,12 @@ def on_disconnect():
                 if room in games:
                     del games[room]
             else:
-                socketio.emit('player_left', {'message': 'Opponent disconnected'}, room=room)
+                socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
             break
+    # Limpieza de jugadores en línea
+    if sid in online_players:
+        del online_players[sid]
+        emit('online_players_update', list(online_players.values()), broadcast=True)
     print(f"Cliente desconectado: {sid}")
 
 # Eventos Socket.IO - Juego
@@ -294,7 +340,7 @@ def on_join(data):
     if room not in players:
         players[room] = {}
     if len(players[room]) >= 2:
-        emit('error', {'message': 'Room is full'}, to=sid)
+        emit('error', {'message': 'La sala está llena'}, to=sid)
         leave_room(room)
         return
 
@@ -334,8 +380,8 @@ def on_join(data):
         socketio.emit('game_start', {
             'board': board,
             'turn': turn,
-            'time_white': games[room]['time_white'],
-            'time_black': games[room]['time_black'],
+            'time_white': games[room]['time_white'] if time_per_player else None,
+            'time_black': games[room]['time_black'] if time_per_player else None,
             'playerColors': player_colors
         }, room=room)
         print(f"Juego iniciado en {room} con turno inicial: {turn}, apuesta: {bet_amount} ARS")
@@ -580,6 +626,42 @@ def on_video_signal(data):
         if player_sid != sid:
             print(f"Enviando señal a {player_sid}")
             emit('video_signal', {'signal': signal}, to=player_sid)
+            
+@socketio.on('play_with_bot')
+def on_play_with_bot(data):
+    sid = request.sid
+    room = f"bot_{sid}"
+    players[room] = {request.sid: {'color': 'white', 'chosen_color': '#000000'}}
+    board, turn = reset_board(room)
+    emit('game_start', {'board': board, 'turn': 'white', 'time_white': 600, 'time_black': 600, 'playerColors': {'white': '#000000', 'black': '#FF0000'}}, room=room)
+    print(f"Partida contra bot iniciada en {room} para {sid}")
+    # Bot juega como negro (responde después del primer movimiento del jugador)
+    
+# Bot responde después de un movimiento del jugador
+@socketio.on('move')
+def on_move_with_bot(data):
+    room = data['room']
+    sid = request.sid
+    if room.startswith('bot_') and room in games and sid in players[room]:
+        on_move(data)  # Procesa el movimiento del jugador
+        if room in games and games[room]['turn'] == 'black':  # Turno del bot
+            board = games[room]['board']
+            chess_board = chess.Board(''.join(''.join(row) for row in board))
+            move = list(chess_board.legal_moves)[0]  # Elige el primer movimiento legal (simple bot)
+            chess_board.push(move)
+            new_board = [['.' for _ in range(8)] for _ in range(8)]
+            for square in chess.SQUARES:
+                piece = chess_board.piece_at(square)
+                if piece:
+                    new_board[7 - chess.square_rank(square)][chess.square_file(square)] = str(piece)
+            games[room]['board'] = new_board
+            games[room]['turn'] = 'white'
+            socketio.emit('update_board', {'board': new_board, 'turn': 'white'}, room=room)
+            print(f"Bot movió en {room}: {move.uci()}")
+    
+@socketio.on('global_message')
+def on_global_message(data):
+    emit('global_message', {'username': session['username'], 'message': data['message']}, broadcast=True)
 
 @socketio.on('video_stop')
 def on_video_stop(data):
@@ -758,4 +840,8 @@ if __name__ == '__main__':
     
     conn.commit()
     conn.close()
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    
+    # Usar puerto dinámico para Render, con debug solo en local
+    port = int(os.getenv("PORT", 5000))
+    debug = os.getenv('RENDER') is None  # Debug solo en local, no en Render
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
