@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()  # Aplicar monkey patch primero
+
 from flask import Flask, render_template, jsonify, request, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import mercadopago
@@ -191,7 +194,7 @@ def index():
 def login():
     username = request.form.get('username')
     password = request.form.get('password')
-    conn = sqlite3.connect('/opt/render/project/src/users.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
     c.execute('SELECT password FROM users WHERE username = ?', (username,))
     result = c.fetchone()
@@ -221,7 +224,7 @@ def register():
         avatar.save(avatar_path)  # Guardar la imagen en el servidor
         print(f"Avatar guardado en: {avatar_path}")
     try:
-        conn = sqlite3.connect('/opt/render/project/src/users.db')
+        conn = sqlite3.connect(DATABASE_PATH)
         c = conn.cursor()
         c.execute('INSERT INTO users (username, password, avatar) VALUES (?, ?, ?)', (username, hashed_password, avatar_path))
         conn.commit()
@@ -234,7 +237,7 @@ def register():
 @app.route('/get_avatar')
 def get_avatar():
     username = request.args.get('username')
-    conn = sqlite3.connect('/opt/render/project/src/users.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
     c.execute('SELECT avatar FROM users WHERE username = ?', (username,))
     result = c.fetchone()
@@ -508,29 +511,12 @@ def on_private_message(data):
     message = data['message']
     username = session.get('username')
     print(f"Mensaje privado en {room} de {username}: {message}")
-    emit('private_message', {'color': available_players.get(request.sid, {}).get('chosen_color', '#FFFFFF'), 'message': message}, room=room)
     if room in players and sid in players[room]:
-        color = players[room][sid]['color']
-        socketio.emit('private_message', {'color': color, 'message': message}, room=room)
-        
-@socketio.on('private_message')
-def on_private_message(data):
-    room = data['room']
-    message = data['message']
-    username = session.get('username')
-    print(f"Mensaje privado en {room} de {username}: {message}")
-    emit('private_message', {'color': available_players.get(request.sid, {}).get('chosen_color', '#FFFFFF'), 'message': message}, room=room)
-    
-@socketio.on('accept_conditions')
-def on_accept_conditions(data):
-    room = data['room']
-    bet = data['bet']
-    enable_bet = data['enable_bet']
-    sid = request.sid
-    print(f"Condiciones aceptadas en {room} por {sid}: bet={bet}, enable_bet={enable_bet}")
-    # Aquí podrías iniciar el juego si ambos aceptan, o notificar al otro jugador
-    emit('bet_accepted', {'bet': bet, 'enable_bet': enable_bet}, room=room)
-    
+        color = players[room][sid]['chosen_color']  # Usar chosen_color
+        socketio.emit('private_message', {'username': username, 'color': color, 'message': message}, room=room)
+    else:
+        emit('error', {'message': 'No estás en esa sala'}, to=sid)
+
 @socketio.on('accept_conditions')
 def on_accept_conditions(data):
     room = data['room']
@@ -541,7 +527,8 @@ def on_accept_conditions(data):
         players[room][sid]['bet'] = bet
         players[room][sid]['enable_bet'] = enable_bet
         opponent_sid = [s for s in players[room] if s != sid][0]
-        if players[room][opponent_sid]['bet'] == bet and players[room][opponent_sid]['enable_bet'] == enable_bet:
+        if (players[room][opponent_sid]['bet'] == bet and 
+            players[room][opponent_sid]['enable_bet'] == enable_bet):
             bet_amount = bet if enable_bet else 0
             if bet_amount > 0:
                 if wallets.get(sid, 0) < bet_amount or wallets.get(opponent_sid, 0) < bet_amount:
@@ -561,6 +548,8 @@ def on_accept_conditions(data):
                 'time_black': None,
                 'playerColors': player_colors
             }, room=room)
+        else:
+            emit('waiting_opponent', {'message': 'Esperando aceptación del oponente'}, to=sid)
 
 # Eventos Socket.IO - Chat y Multimedia
 @socketio.on('chat_message')
@@ -615,7 +604,7 @@ def on_save_game(data):
         board_json = json.dumps(data['board'])
         turn = data['turn']
         try:
-            conn = sqlite3.connect('users.db')
+            conn = sqlite3.connect(DATABASE_PATH)
             c = conn.cursor()
             c.execute('''INSERT INTO saved_games (username, room, game_name, board, turn)
                          VALUES (?, ?, ?, ?, ?)''', (username, room, game_name, board_json, turn))
@@ -633,7 +622,7 @@ def on_get_saved_games(data):
     username = data['username']
     sid = request.sid
     try:
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect(DATABASE_PATH)
         c = conn.cursor()
         c.execute('SELECT game_name, room FROM saved_games WHERE username = ?', (username,))
         games_list = [{'game_name': row[0], 'room': row[1]} for row in c.fetchall()]
@@ -649,7 +638,7 @@ def on_load_game(data):
     game_name = data['game_name']
     sid = request.sid
     try:
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect(DATABASE_PATH)
         c = conn.cursor()
         c.execute('SELECT board, turn, room FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
         result = c.fetchone()
