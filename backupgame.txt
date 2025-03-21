@@ -1,0 +1,469 @@
+let room = null;
+let board = null;
+let turn = null;
+let selectedSquare = null;
+let timeWhite = null;
+let timeBlack = null;
+let lastUpdateTime = null;
+let timerInterval = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let previousBoard = null;
+let peer = null;
+let localStream = null;
+let playerColors = {};
+let myColor = null;  // Definir myColor globalmente
+
+const socket = io('http://192.168.0.6:5000');
+const chessboard = document.getElementById('chessboard');
+const roomSelection = document.getElementById('room-selection');
+const chat = document.getElementById('chat');
+const gameButtons = document.getElementById('game-buttons');
+const savedGamesDiv = document.getElementById('saved-games');
+const timers = document.getElementById('timers');
+let username = null;
+
+function startVideoCall() {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+            localStream = stream;
+            document.getElementById('local-video').srcObject = stream;
+            document.getElementById('local-video').style.display = 'block';
+            document.getElementById('start-video').style.display = 'none';
+            document.getElementById('stop-video').style.display = 'inline';
+
+            peer = new SimplePeer({ initiator: true, stream: stream });
+            peer.on('signal', data => {
+                socket.emit('video_signal', { room: room, signal: data });
+            });
+            peer.on('stream', remoteStream => {
+                document.getElementById('remote-video').srcObject = remoteStream;
+                document.getElementById('remote-video').style.display = 'block';
+            });
+        })
+        .catch(err => {
+            console.error('Error al acceder a la cámara/micrófono:', err);
+            alert('No se pudo iniciar la videollamada. Asegurate de dar permisos.');
+        });
+}
+
+function stopVideoCall() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        document.getElementById('local-video').srcObject = null;
+        document.getElementById('remote-video').srcObject = null;
+        document.getElementById('local-video').style.display = 'none';
+        document.getElementById('remote-video').style.display = 'none';
+        document.getElementById('start-video').style.display = 'inline';
+        document.getElementById('stop-video').style.display = 'none';
+    }
+    if (peer) {
+        peer.destroy();
+        peer = null;
+    }
+    socket.emit('video_stop', { room: room });
+}
+
+function joinRoom() {
+    room = document.getElementById('room-id').value.trim();
+    const timer = document.getElementById('timer-select').value;
+    const color = document.getElementById('color-select').value;
+    if (room) {
+        console.log(`Intentando unirse a la sala: ${room} con temporizador: ${timer} minutos y color: ${color}`);
+        socket.emit('join', { room: room, timer: timer, color: color });
+    } else {
+        alert('Por favor, ingresá un ID de sala');
+    }
+}
+
+function renderBoard() {
+    chessboard.innerHTML = '';
+    const pieceSymbols = {
+        'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
+        'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
+    };
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const square = document.createElement('div');
+            square.className = 'square ' + ((row + col) % 2 === 0 ? 'white' : 'black');
+            square.dataset.row = row;
+            square.dataset.col = col;
+            const piece = board[row][col];
+            square.textContent = piece === '.' ? '' : (pieceSymbols[piece] || piece);
+            if (piece !== '.') {
+                square.style.color = isWhite(piece) ? playerColors['white'] : playerColors['black'];
+            }
+            square.addEventListener('click', handleSquareClick);
+            chessboard.appendChild(square);
+        }
+    }
+}
+
+function isWhite(piece) {
+    return piece === piece.toUpperCase();
+}
+
+function handleSquareClick(event) {
+    const row = parseInt(event.target.dataset.row);
+    const col = parseInt(event.target.dataset.col);
+
+    if (!selectedSquare) {
+        if (board[row][col] !== '.') {
+            selectedSquare = { row, col };
+            event.target.style.backgroundColor = '#d4af37';
+        }
+    } else {
+        const startRow = selectedSquare.row;
+        const startCol = selectedSquare.col;
+        socket.emit('move', {
+            room: room,
+            start_row: startRow,
+            start_col: startCol,
+            end_row: row,
+            end_col: col
+        });
+        document.querySelector(`.square[data-row="${startRow}"][data-col="${startCol}"]`).style.backgroundColor = '';
+        selectedSquare = null;
+    }
+}
+
+function formatTime(seconds) {
+    if (seconds === null || isNaN(seconds) || seconds < 0) return '--:--.--';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const millis = Math.floor((seconds % 1) * 100);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${millis.toString().padStart(2, '0')}`;
+}
+
+function updateTimers() {
+    console.log(`Actualizando temporizadores: Blancas=${timeWhite}, Negras=${timeBlack}`);
+    document.getElementById('white-timer').textContent = `Blancas: ${formatTime(timeWhite)}`;
+    document.getElementById('black-timer').textContent = `Negras: ${formatTime(timeBlack)}`;
+}
+
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    lastUpdateTime = Date.now();
+    timerInterval = setInterval(() => {
+        if (timeWhite !== null && timeBlack !== null) {
+            const now = Date.now();
+            const elapsed = (now - lastUpdateTime) / 1000;
+            lastUpdateTime = now;
+            if (turn === 'white') {
+                timeWhite = Math.max(0, timeWhite - elapsed);
+            } else {
+                timeBlack = Math.max(0, timeBlack - elapsed);
+            }
+            updateTimers();
+        }
+    }, 10);
+}
+
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
+
+function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (message && room) {
+        socket.emit('chat_message', { room: room, message: message });
+        input.value = '';
+    }
+}
+
+function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                sendAudioMessage(audioBlob);
+                stream.getTracks().forEach(track => track.stop());
+            };
+            mediaRecorder.start();
+            document.getElementById('record-audio').style.display = 'none';
+            document.getElementById('stop-audio').style.display = 'inline';
+            console.log('Grabación iniciada');
+        })
+        .catch(err => {
+            console.error('Error al acceder al micrófono:', err);
+            alert('No se pudo acceder al micrófono. Asegurate de dar permisos.');
+        });
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        document.getElementById('record-audio').style.display = 'inline';
+        document.getElementById('stop-audio').style.display = 'none';
+        console.log('Grabación detenida');
+    }
+}
+
+function sendAudioMessage(audioBlob) {
+    if (room) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const audioData = reader.result.split(',')[1];
+            socket.emit('audio_message', { room: room, audio: audioData });
+        };
+        reader.readAsDataURL(audioBlob);
+    }
+}
+
+function goBack() {
+    socket.emit('leave', { room: room });
+    roomSelection.style.display = 'block';
+    chessboard.style.display = 'none';
+    chat.style.display = 'none';
+    gameButtons.style.display = 'none';
+    timers.style.display = 'none';
+    savedGamesDiv.style.display = 'none';
+    stopTimer();
+    room = null;
+    board = null;
+    turn = null;
+    selectedSquare = null;
+    timeWhite = null;
+    timeBlack = null;
+    myColor = null;  // Resetear myColor
+    updateTimers();
+}
+
+function saveGame() {
+    if (!username) {
+        alert('Debes iniciar sesión para guardar una partida');
+        return;
+    }
+    const gameName = prompt('Ingresá un nombre para la partida:');
+    if (gameName && room) {
+        socket.emit('save_game', {
+            room: room,
+            game_name: gameName,
+            board: board,
+            turn: turn
+        });
+    }
+}
+
+function resignGame() {
+    if (room) {
+        socket.emit('resign', { room: room });
+    }
+}
+
+function loadSavedGames() {
+    if (!username) {
+        alert('Debes iniciar sesión para cargar una partida');
+        return;
+    }
+    socket.emit('get_saved_games', { username: username });
+    savedGamesDiv.style.display = 'block';
+}
+
+function loadGame(gameName) {
+    if (!username) {
+        alert('Debes iniciar sesión para cargar una partida');
+        return;
+    }
+    socket.emit('load_game', { username: username, game_name: gameName });
+}
+
+socket.on('connect', () => {
+    console.log('Conectado al servidor');
+});
+
+socket.on('color_assigned', (data) => {
+    myColor = data.color;  // Asignar myColor
+    console.log(`Color asignado: ${data.color}, Color elegido: ${data.chosenColor}`);
+    playerColors[data.color] = data.chosenColor;
+});
+
+socket.on('video_signal', (data) => {
+    if (!peer) {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                localStream = stream;
+                document.getElementById('local-video').srcObject = stream;
+                document.getElementById('local-video').style.display = 'block';
+                document.getElementById('start-video').style.display = 'none';
+                document.getElementById('stop-video').style.display = 'inline';
+
+                peer = new SimplePeer({ stream: stream });
+                peer.on('signal', signal => {
+                    socket.emit('video_signal', { room: room, signal: signal });
+                });
+                peer.on('stream', remoteStream => {
+                    document.getElementById('remote-video').srcObject = remoteStream;
+                    document.getElementById('remote-video').style.display = 'block';
+                });
+                peer.signal(data.signal);
+            });
+    } else {
+        peer.signal(data.signal);
+    }
+});
+
+socket.on('video_stop', () => {
+    stopVideoCall();
+});
+
+socket.on('game_start', (data) => {
+    board = data.board;
+    turn = data.turn;
+    timeWhite = data.time_white;
+    timeBlack = data.time_black;
+    playerColors = data.playerColors;
+    previousBoard = JSON.parse(JSON.stringify(board));
+    console.log('Juego iniciado con:', { board, turn, timeWhite, timeBlack, playerColors, myColor });
+    console.log(`Es mi turno: ${myColor === turn}`);
+    roomSelection.style.display = 'none';
+    chessboard.style.display = 'grid';  // Cambiar a 'grid' para que coincida con CSS
+    chat.style.display = 'block';
+    gameButtons.style.display = 'block';
+    timers.style.display = 'block';
+    savedGamesDiv.style.display = 'none';
+    renderBoard();
+    updateTimers();
+    if (timeWhite !== null && timeBlack !== null) startTimer();
+});
+
+socket.on('update_board', (data) => {
+    board = data.board;
+    turn = data.turn;
+    console.log(`Tablero actualizado, turno: ${turn}, mi color: ${myColor}`);
+    console.log(`Es mi turno: ${myColor === turn}`);
+    previousBoard = JSON.parse(JSON.stringify(board));
+    renderBoard();
+});
+
+socket.on('timer_update', (data) => {
+    console.log('Recibido timer_update:', data);
+    timeWhite = data.time_white;
+    timeBlack = data.time_black;
+    lastUpdateTime = Date.now();
+    updateTimers();
+});
+
+socket.on('new_message', (data) => {
+    const messages = document.getElementById('chat-messages');
+    const message = document.createElement('div');
+    message.textContent = `${data.color}: ${data.message}`;
+    messages.appendChild(message);
+    messages.scrollTop = messages.scrollHeight;
+});
+
+socket.on('audio_message', (data) => {
+    const messages = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.textContent = `${data.color}: `;
+    const audio = document.createElement('audio');
+    audio.controls = true;
+    audio.src = `data:audio/webm;base64,${data.audio}`;
+    messageDiv.appendChild(audio);
+    messages.appendChild(messageDiv);
+    messages.scrollTop = messages.scrollHeight;
+});
+
+socket.on('player_left', (data) => {
+    alert(data.message);
+    goBack();
+});
+
+socket.on('game_over', (data) => {
+    alert(data.message);
+    goBack();
+});
+
+socket.on('check', (data) => {
+    alert(data.message);
+});
+
+socket.on('resigned', (data) => {
+    alert(data.message);
+    goBack();
+});
+
+socket.on('error', (data) => {
+    alert(data.message);
+});
+
+socket.on('game_saved', (data) => {
+    alert(data.message);
+});
+
+socket.on('saved_games_list', (data) => {
+    savedGamesDiv.innerHTML = '';
+    data.games.forEach(game => {
+        const button = document.createElement('button');
+        button.textContent = `${game.game_name} (Sala: ${game.room})`;
+        button.onclick = () => loadGame(game.game_name);
+        savedGamesDiv.appendChild(button);
+    });
+});
+
+socket.on('game_loaded', (data) => {
+    board = data.board;
+    turn = data.turn;
+    room = data.room;
+    timeWhite = null;
+    timeBlack = null;
+    roomSelection.style.display = 'none';
+    chessboard.style.display = 'grid';
+    chat.style.display = 'block';
+    gameButtons.style.display = 'block';
+    timers.style.display = 'block';
+    savedGamesDiv.style.display = 'none';
+    renderBoard();
+    updateTimers();
+    alert(`Partida "${data.game_name}" cargada exitosamente en la sala ${room}`);
+});
+
+document.getElementById('login-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    fetch('/login', {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json()).then(data => {
+        if (data.success) {
+            username = formData.get('username');
+            document.getElementById('login-register').style.display = 'none';
+            document.getElementById('room-selection').parentElement.style.display = 'block';
+        } else {
+            document.getElementById('login-error').textContent = data.error;
+        }
+    });
+});
+
+document.getElementById('register-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    fetch('/register', {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json()).then(data => {
+        if (data.success) {
+            username = formData.get('username');
+            document.getElementById('login-register').style.display = 'none';
+            document.getElementById('room-selection').parentElement.style.display = 'block';
+        } else {
+            document.getElementById('register-error').textContent = data.error;
+        }
+    });
+});
+
+window.onload = () => {
+    setTimeout(() => {
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('login-register').style.display = 'block';
+    }, 3000);
+};

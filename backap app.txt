@@ -1,0 +1,546 @@
+from flask import Flask, render_template, jsonify, request, session
+from flask_socketio import SocketIO, emit, join_room, leave_room
+import sqlite3
+import bcrypt
+import json
+import time
+import colorsys
+
+app = Flask(__name__)
+app.secret_key = 'your-secret-key-here'  # Cambia esto por una clave secreta fuerte
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+players = {}
+games = {}
+
+initial_board = [
+    ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+    ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+    ['.', '.', '.', '.', '.', '.', '.', '.'],
+    ['.', '.', '.', '.', '.', '.', '.', '.'],
+    ['.', '.', '.', '.', '.', '.', '.', '.'],
+    ['.', '.', '.', '.', '.', '.', '.', '.'],
+    ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+    ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+]
+
+def reset_board(room):
+    games[room] = {
+        'board': [row[:] for row in initial_board],
+        'turn': 'white',
+        'time_white': None,  # Tiempo inicial en segundos para blancas
+        'time_black': None,  # Tiempo inicial en segundos para negras
+        'last_move_time': None  # Último movimiento para calcular decremento
+    }
+    return games[room]['board'], games[room]['turn']
+
+def is_white(piece):
+    return piece.isupper()
+
+def is_black(piece):
+    return piece.islower()
+
+def is_valid_move(piece, start_row, start_col, end_row, end_col, board):
+    target = board[end_row][end_col]
+    if target != '.' and is_white(piece) == is_white(target):
+        return False
+
+    dx = abs(end_row - start_row)
+    dy = abs(end_col - start_col)
+
+    piece = piece.lower()
+    if piece == 'p':
+        direction = -1 if is_white(board[start_row][start_col]) else 1
+        if start_col == end_col and board[end_row][end_col] == '.':
+            if end_row == start_row + direction:
+                return True
+            if (start_row == 1 and direction == 1) or (start_row == 6 and direction == -1):
+                if end_row == start_row + 2 * direction and board[start_row + direction][start_col] == '.':
+                    return True
+        if dx == 1 and dy == 1 and target != '.' and is_white(target) != is_white(board[start_row][start_col]):
+            if end_row == start_row + direction:
+                return True
+        return False
+    elif piece == 'r':
+        if dx == 0 or dy == 0:
+            return is_path_clear(start_row, start_col, end_row, end_col, board)
+        return False
+    elif piece == 'n':
+        return (dx == 2 and dy == 1) or (dx == 1 and dy == 2)
+    elif piece == 'b':
+        if dx == dy:
+            return is_path_clear(start_row, start_col, end_row, end_col, board)
+        return False
+    elif piece == 'q':
+        if dx == 0 or dy == 0 or dx == dy:
+            return is_path_clear(start_row, start_col, end_row, end_col, board)
+        return False
+    elif piece == 'k':
+        return dx <= 1 and dy <= 1 and (dx > 0 or dy > 0)
+    return False
+
+def is_path_clear(start_row, start_col, end_row, end_col, board):
+    if start_row == end_row:
+        step = 1 if end_col > start_col else -1
+        for col in range(start_col + step, end_col, step):
+            if board[start_row][col] != '.':
+                return False
+    elif start_col == end_col:
+        step = 1 if end_row > start_row else -1
+        for row in range(start_row + step, end_row, step):
+            if board[row][start_col] != '.':
+                return False
+    else:
+        row_step = 1 if end_row > start_row else -1
+        col_step = 1 if end_col > start_col else -1
+        row, col = start_row + row_step, start_col + col_step
+        while row != end_row and col != end_col:
+            if board[row][col] != '.':
+                return False
+            row += row_step
+            col += col_step
+    return True
+
+def is_in_check(board, color):
+    king_position = None
+    for row in range(8):
+        for col in range(8):
+            piece = board[row][col]
+            if color == 'white' and piece == 'K':
+                king_position = (row, col)
+            elif color == 'black' and piece == 'k':
+                king_position = (row, col)
+
+    if king_position is None:
+        return False
+
+    king_row, king_col = king_position
+
+    for row in range(8):
+        for col in range(8):
+            piece = board[row][col]
+            if piece != '.':
+                if color == 'white' and piece.islower():
+                    if is_valid_move(piece, row, col, king_row, king_col, board):
+                        return True
+                elif color == 'black' and piece.isupper():
+                    if is_valid_move(piece, row, col, king_row, king_col, board):
+                        return True
+    return False
+
+def is_checkmate(board, color):
+    if not is_in_check(board, color):
+        return False
+
+    for start_row in range(8):
+        for start_col in range(8):
+            piece = board[start_row][start_col]
+            if piece != '.' and (is_white(piece) if color == 'white' else is_black(piece)):
+                for end_row in range(8):
+                    for end_col in range(8):
+                        if is_valid_move(piece, start_row, start_col, end_row, end_col, board):
+                            temp_board = [row[:] for row in board]
+                            temp_board[end_row][end_col] = piece
+                            temp_board[start_row][start_col] = '.'
+                            if not is_in_check(temp_board, color):
+                                return False
+    return True
+
+def update_timer(room):
+    if room in games and games[room]['time_white'] is not None:
+        current_time = time.time()
+        if games[room]['last_move_time']:
+            elapsed = current_time - games[room]['last_move_time']
+            if games[room]['turn'] == 'white':
+                games[room]['time_white'] = max(0, games[room]['time_white'] - elapsed)
+            else:
+                games[room]['time_black'] = max(0, games[room]['time_black'] - elapsed)
+        games[room]['last_move_time'] = current_time
+        print(f"Actualizando temporizador en {room}: Blancas={games[room]['time_white']:.2f}, Negras={games[room]['time_black']:.2f}")
+        socketio.emit('timer_update', {
+            'time_white': games[room]['time_white'],
+            'time_black': games[room]['time_black']
+        }, room=room)
+        if games[room]['time_white'] <= 0:
+            socketio.emit('game_over', {'message': '¡Tiempo agotado! Gana negras'}, room=room)
+            reset_board(room)
+            if room in players:
+                del players[room]
+        elif games[room]['time_black'] <= 0:
+            socketio.emit('game_over', {'message': '¡Tiempo agotado! Gana blancas'}, room=room)
+            reset_board(room)
+            if room in players:
+                del players[room]
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form.get('username')
+    password = request.form.get('password')
+
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('SELECT password FROM users WHERE username = ?', (username,))
+    result = c.fetchone()
+    conn.close()
+
+    if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
+        session['username'] = username
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': 'Usuario o contraseña incorrectos'}), 401
+
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.form.get('username')
+    password = request.form.get('password')
+
+    if not username or not password:
+        return jsonify({'error': 'Usuario y contraseña requeridos'}), 400
+
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_password))
+        conn.commit()
+        conn.close()
+        session['username'] = username
+        return jsonify({'success': True})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'El usuario ya existe'}), 400
+
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    sid = request.sid
+    timer_minutes = int(data.get('timer', 0))
+    chosen_color = data.get('color', '#FFFFFF')
+    join_room(room)
+
+    print(f"Jugador {sid} intentando unirse a la sala {room} con temporizador {timer_minutes} minutos y color {chosen_color}")
+    print(f"Estado actual de players[{room}]: {players.get(room, 'No existe')}")
+
+    if room not in players:
+        players[room] = {}
+
+    if len(players[room]) >= 2:
+        print(f"Sala {room} llena: {players[room]}")
+        emit('error', {'message': 'Room is full'}, to=sid)
+        leave_room(room)
+        return
+
+    if len(players[room]) == 1:
+        first_player_sid = list(players[room].keys())[0]
+        first_player_color = players[room][first_player_sid]['chosen_color']
+        if chosen_color.lower() == first_player_color.lower():
+            print(f"Color {chosen_color} ya elegido por {first_player_sid}")
+            emit('error', {'message': 'Ese color ya fue elegido. Por favor, elegí otro.'}, to=sid)
+            leave_room(room)
+            return
+
+    color = 'white' if len(players[room]) == 0 else 'black'
+    players[room][sid] = {'color': color, 'chosen_color': chosen_color}
+    emit('color_assigned', {'color': color, 'chosenColor': chosen_color}, to=sid)
+    print(f"Jugador {sid} asignado al color {color} con color elegido {chosen_color} en la sala {room}")
+
+    if len(players[room]) == 2:
+        board, _ = reset_board(room)
+        player_list = list(players[room].items())
+        white_sid, white_data = player_list[0] if players[room][player_list[0][0]]['color'] == 'white' else player_list[1]
+        black_sid, black_data = player_list[0] if players[room][player_list[0][0]]['color'] == 'black' else player_list[1]
+
+        white_rgb = tuple(int(white_data['chosen_color'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        black_rgb = tuple(int(black_data['chosen_color'].lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
+        white_hsl = colorsys.rgb_to_hls(white_rgb[0]/255, white_rgb[1]/255, white_rgb[2]/255)
+        black_hsl = colorsys.rgb_to_hls(black_rgb[0]/255, black_rgb[1]/255, black_rgb[2]/255)
+
+        turn = 'white' if white_hsl[1] > black_hsl[1] else 'black'
+        games[room]['turn'] = turn
+        player_colors = {'white': white_data['chosen_color'], 'black': black_data['chosen_color']}
+
+        if timer_minutes > 0:
+            total_seconds = timer_minutes * 60
+            games[room]['time_white'] = total_seconds
+            games[room]['time_black'] = total_seconds
+            games[room]['last_move_time'] = time.time()
+            print(f"Temporizador inicializado en {room}: {total_seconds} segundos por jugador")
+        else:
+            print(f"Sin temporizador para la sala {room}")
+
+        print(f"Juego iniciado en {room} con turno inicial: {turn} (Blancas: {white_data['chosen_color']}, Negras: {black_data['chosen_color']})")
+        socketio.emit('game_start', {
+            'board': board,
+            'turn': turn,
+            'time_white': games[room]['time_white'],
+            'time_black': games[room]['time_black'],
+            'playerColors': player_colors
+        }, room=room)
+
+@socketio.on('move')
+def on_move(data):
+    room = data['room']
+    sid = request.sid
+    start_row, start_col = data['start_row'], data['start_col']
+    end_row, end_col = data['end_row'], data['end_col']
+
+    if room not in players or sid not in players[room]:
+        emit('error', {'message': 'Not in a valid room'}, to=sid)
+        return
+
+    player_color = players[room][sid]['color']
+    board = games[room]['board']
+    turn = games[room]['turn']
+    piece = board[start_row][start_col]
+
+    print(f"Intento de movimiento en {room}: Jugador {sid} ({player_color}), Turno actual: {turn}, Pieza: {piece}")
+
+    if piece == '.':
+        emit('error', {'message': 'No piece at start position'}, to=sid)
+        return
+
+    if player_color != turn:
+        emit('error', {'message': 'Not your turn'}, to=sid)
+        return
+
+    if (turn == 'white' and not is_white(piece)) or (turn == 'black' and not is_black(piece)):
+        emit('error', {'message': 'Not your piece'}, to=sid)
+        return
+
+    if is_valid_move(piece, start_row, start_col, end_row, end_col, board):
+        temp_board = [row[:] for row in board]
+        temp_board[end_row][end_col] = piece
+        temp_board[start_row][start_col] = '.'
+        if is_in_check(temp_board, turn):
+            emit('error', {'message': 'Movimiento inválido, te deja en jaque'}, to=sid)
+            return
+
+        board[end_row][end_col] = piece
+        board[start_row][start_col] = '.'
+        games[room]['turn'] = 'black' if turn == 'white' else 'white'
+
+        if games[room]['time_white'] is not None:
+            update_timer(room)
+
+        if is_in_check(board, games[room]['turn']):
+            if is_checkmate(board, games[room]['turn']):
+                winner = 'white' if games[room]['turn'] == 'black' else 'black'
+                socketio.emit('game_over', {'message': f'¡Jaque mate! Gana {winner}'}, room=room)
+                if room in players:
+                    del players[room]
+                if room in games:
+                    del games[room]
+            else:
+                socketio.emit('check', {'message': 'Estás en jaque'}, room=room)
+
+        socketio.emit('update_board', {'board': board, 'turn': games[room]['turn']}, room=room)
+    else:
+        emit('error', {'message': 'Movimiento inválido'}, to=sid)
+
+@socketio.on('chat_message')
+def on_chat_message(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        message = data['message']
+        color = players[room][sid]['color']
+        socketio.emit('new_message', {'color': color, 'message': message}, room=room)
+
+@socketio.on('audio_message')
+def on_audio_message(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        audio_data = data['audio']
+        color = players[room][sid]['color']
+        socketio.emit('audio_message', {'color': color, 'audio': audio_data}, room=room)
+        print(f"Audio enviado por {color} en la sala {room}")
+
+@socketio.on('video_signal')
+def on_video_signal(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        signal = data['signal']
+        for player_sid in players[room]:
+            if player_sid != sid:
+                emit('video_signal', {'signal': signal}, to=player_sid)
+
+@socketio.on('video_stop')
+def on_video_stop(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        for player_sid in players[room]:
+            if player_sid != sid:
+                emit('video_stop', to=player_sid)
+
+@socketio.on('disconnect')
+def on_disconnect():
+    sid = request.sid
+    for room in list(players.keys()):
+        if sid in players[room]:
+            del players[room][sid]
+            if not players[room]:
+                del players[room]
+                if room in games:
+                    del games[room]
+                print(f"Sala {room} vacía tras desconexión de {sid}, eliminada")
+            else:
+                socketio.emit('player_left', {'message': 'Opponent disconnected'}, room=room)
+                # No reseteamos el tablero aquí para mantener el estado si queda un jugador
+            break
+
+@socketio.on('disconnect')
+def on_disconnect():
+    sid = request.sid
+    for room in list(players.keys()):
+        if sid in players[room]:
+            del players[room][sid]
+            if not players[room]:
+                del players[room]
+                if room in games:
+                    del games[room]
+                print(f"Sala {room} vacía tras desconexión de {sid}, eliminada")
+            else:
+                socketio.emit('player_left', {'message': 'Opponent disconnected'}, room=room)
+                # No reseteamos el tablero aquí para mantener el estado si queda un jugador
+            break
+
+@socketio.on('save_game')
+def on_save_game(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        username = session.get('username')
+        if not username:
+            emit('error', {'message': 'No estás autenticado'}, to=sid)
+            return
+        
+        game_name = data['game_name']
+        board_json = json.dumps(data['board'])
+        turn = data['turn']
+
+        try:
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute('''INSERT INTO saved_games (username, room, game_name, board, turn)
+                         VALUES (?, ?, ?, ?, ?)''', (username, room, game_name, board_json, turn))
+            conn.commit()
+            conn.close()
+            socketio.emit('game_saved', {'message': f'Partida "{game_name}" guardada exitosamente'}, room=room)
+        except sqlite3.IntegrityError:
+            emit('error', {'message': f'Ya existe una partida guardada con el nombre "{game_name}"'}, to=sid)
+        except Exception as e:
+            emit('error', {'message': 'Error al guardar la partida'}, to=sid)
+            print(f"Error al guardar partida: {e}")
+
+@socketio.on('game_over')
+def on_game_over(data):
+    room = data['room']
+    if room in players:
+        del players[room]
+    if room in games:
+        del games[room]
+    print(f"Juego terminado en {room}, sala limpiada")
+
+@socketio.on('resign')
+def on_resign(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        winner = 'black' if players[room][sid]['color'] == 'white' else 'white'
+        socketio.emit('resigned', {'message': f'El jugador {players[room][sid]["color"]} abandonó. Gana {winner}'}, room=room)
+        if room in players:
+            del players[room]
+        if room in games:
+            del games[room]
+
+@socketio.on('get_saved_games')
+def on_get_saved_games(data):
+    username = data['username']
+    sid = request.sid
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('SELECT game_name, room FROM saved_games WHERE username = ?', (username,))
+        games_list = [{'game_name': row[0], 'room': row[1]} for row in c.fetchall()]
+        conn.close()
+        socketio.emit('saved_games_list', {'games': games_list}, to=sid)
+    except Exception as e:
+        emit('error', {'message': 'Error al obtener las partidas guardadas'}, to=sid)
+        print(f"Error al obtener partidas: {e}")
+
+@socketio.on('load_game')
+def on_load_game(data):
+    username = data['username']
+    game_name = data['game_name']
+    sid = request.sid
+
+    try:
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute('SELECT board, turn, room FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
+        result = c.fetchone()
+        conn.close()
+
+        if result:
+            board = json.loads(result[0])
+            turn = result[1]
+            room = result[2]
+
+            join_room(room)
+            if room not in players:
+                players[room] = {}
+            if len(players[room]) >= 2:
+                emit('error', {'message': 'La sala está llena'}, to=sid)
+                leave_room(room)
+                return
+
+            color = 'white' if len(players[room]) == 0 else 'black'
+            players[room][sid] = {'color': color, 'chosen_color': '#FFFFFF'}  # Color por defecto
+            emit('color_assigned', {'color': color, 'chosenColor': '#FFFFFF'}, to=sid)
+            print(f"Jugador {sid} asignado al color {color} en la sala {room} al cargar partida")
+
+            games[room] = {'board': board, 'turn': turn, 'time_white': None, 'time_black': None, 'last_move_time': None}
+            emit('game_loaded', {'board': board, 'turn': turn, 'game_name': game_name, 'room': room}, to=sid)
+
+            if len(players[room]) == 2:
+                player_colors = {'white': players[room][list(players[room].keys())[0]]['chosen_color'],
+                                 'black': players[room][list(players[room].keys())[1]]['chosen_color']}
+                socketio.emit('game_start', {
+                    'board': board,
+                    'turn': turn,
+                    'time_white': None,
+                    'time_black': None,
+                    'playerColors': player_colors
+                }, room=room)
+        else:
+            emit('error', {'message': 'Partida no encontrada'}, to=sid)
+    except Exception as e:
+        emit('error', {'message': 'Error al cargar la partida'}, to=sid)
+        print(f"Error al cargar partida: {e}")
+
+if __name__ == '__main__':
+    print("Limpiando players y games al inicio...")
+    players.clear()
+    games.clear()
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT UNIQUE, password TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS saved_games (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        room TEXT,
+        game_name TEXT,
+        board TEXT,
+        turn TEXT,
+        UNIQUE(username, game_name)
+    )''')
+    conn.commit()
+    conn.close()
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
