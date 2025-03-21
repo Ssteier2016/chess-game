@@ -4,3 +4,4 @@ bcrypt
 eventlet
 mercadopago
 gunicorn
+python-chess
