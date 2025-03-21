@@ -12,7 +12,7 @@ import os
 app = Flask(__name__)
 app.secret_key = 'Ma730yIan'  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
-sdk = mercadopago.SDK("TEST-7030946997237677-031704-0d76aa7f3f9dc1968b5eb9a39b79b306-320701222")  # Access Token
+sdk = mercadopago.SDK("APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132")  # Access Token
 
 # Variables Globales
 players = {}  # {room: {sid: {'color': str, 'chosen_color': str, 'bet': int, 'enable_bet': bool}}}
@@ -176,7 +176,7 @@ def index():
 def login():
     username = request.form.get('username')
     password = request.form.get('password')
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('/opt/render/project/src/users.db')
     c = conn.cursor()
     c.execute('SELECT password FROM users WHERE username = ?', (username,))
     result = c.fetchone()
@@ -206,7 +206,7 @@ def register():
         avatar.save(avatar_path)  # Guardar la imagen en el servidor
         print(f"Avatar guardado en: {avatar_path}")
     try:
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect('/opt/render/project/src/users.db')
         c = conn.cursor()
         c.execute('INSERT INTO users (username, password, avatar) VALUES (?, ?, ?)', (username, hashed_password, avatar_path))
         conn.commit()
@@ -219,7 +219,7 @@ def register():
 @app.route('/get_avatar')
 def get_avatar():
     username = request.args.get('username')
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('/opt/render/project/src/users.db')
     c = conn.cursor()
     c.execute('SELECT avatar FROM users WHERE username = ?', (username,))
     result = c.fetchone()
@@ -394,7 +394,7 @@ def on_join_waitlist(data):
     sid = request.sid
     username = session.get('username')
     chosen_color = data.get('color', '#FFFFFF')
-    avatar = data.get('avatar', '/static/avatars/default-avatar.png')
+    avatar = data.get('avatar', '/static/default-avatar.png')
     print(f"Recibido join_waitlist: sid={sid}, username={username}, color={chosen_color}, avatar={avatar}")
     if username and sid not in available_players:
         available_players[sid] = {'username': username, 'chosen_color': chosen_color, 'avatar': avatar}
@@ -403,7 +403,7 @@ def on_join_waitlist(data):
         players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
                         for s, info in available_players.items()]
         print(f"Emitting waitlist_update con {len(players_list)} jugadores: {players_list}")
-        socketio.emit('waitlist_update', {'players': players_list})
+        socketio.emit('waitlist_update', {'players': players_list}, broadcast=True)
     else:
         print(f"Fallo al unir a {sid} a la lista de espera: username={username}, ya en lista={sid in available_players}")
         
@@ -671,11 +671,15 @@ def on_deposit_request(data):
     sid = request.sid
     amount = data['amount']
     preference = {
-        "items": [{"title": "Recarga PeonKing", "quantity": 1, "currency_id": "ARS", "unit_price": float(amount)}],
-        "payer": {"email": "test_user@example.com"},
-        "external_reference": sid,
-        "back_urls": {"success": "http://192.168.0.6:5000/success", "failure": "http://192.168.0.6:5000/failure", "pending": "http://192.168.0.6:5000/pending"},
-        "auto_return": "approved"
+    "items": [{"title": "Recarga PeonKing", "quantity": 1, "currency_id": "ARS", "unit_price": float(amount)}],
+    "payer": {"email": "test_user@example.com"},
+    "external_reference": sid,
+    "back_urls": {
+        "success": "https://peonkingame.onrender.com/success",
+        "failure": "https://peonkingame.onrender.com/failure",
+        "pending": "https://peonkingame.onrender.com/pending"
+    },
+    "auto_return": "approved"
     }
     try:
         preference_result = sdk.preference().create(preference)
@@ -745,4 +749,4 @@ if __name__ == '__main__':
     
     conn.commit()
     conn.close()
-    socketio.run(app, host='0.0.0.0', port=5000)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

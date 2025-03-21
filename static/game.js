@@ -17,14 +17,14 @@ let myColor = null;
 let walletBalance = 0;
 let username = null;
 let currentAvatar = null;
-const socket = io('https://peonkingonline.com');
+const socket = io('https://peonkingame.onrender.com');
 const chessboard = document.getElementById('chessboard');
 const roomSelection = document.getElementById('room-selection');
 const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
-const mp = new MercadoPago('TEST-90b56574-788a-41dc-971c-1c4effe98c38', { locale: 'es-AR' });
+const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' });
 
 // Funciones de Interfaz y Juego
 function joinRoom() {
@@ -50,7 +50,7 @@ function joinWaitlist() {
         return;
     }
     const color = document.getElementById('color-select').value;
-    socket.emit('join_waitlist', { color, avatar: currentAvatar || '/static/avatars/default-avatar.png' });
+    socket.emit('join_waitlist', { color, avatar: currentAvatar || '/static/default-avatar.png' });
     document.getElementById('room-selection').style.display = 'none';
     document.getElementById('waitlist').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
