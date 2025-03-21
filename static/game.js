@@ -256,17 +256,43 @@ function startVideoCall() {
             document.getElementById('start-video').style.display = 'none';
             document.getElementById('stop-video').style.display = 'inline';
             peer = new SimplePeer({ initiator: true, stream });
-            peer.on('signal', data => socket.emit('video_signal', { room, signal: data }));
+            peer.on('signal', data => {
+                console.log('Enviando señal WebRTC:', data);
+                socket.emit('video_signal', { room, signal: data });
+            });
             peer.on('stream', remoteStream => {
+                console.log('Recibiendo stream remoto');
                 document.getElementById('remote-video').srcObject = remoteStream;
                 document.getElementById('remote-video').style.display = 'block';
             });
         })
+        .catch(err => console.error('Error al iniciar videollamada:', err));
+}
+
+socket.emit('video_signal', (data) => {
+    console.log('Señal WebRTC recibida:', data.signal);
+    if (!peer) {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                localStream = stream;
+                document.getElementById('local-video').srcObject = stream;
+                document.getElementById('local-video').style.display = 'block';
+                peer = new SimplePeer({ stream });
+                peer.on('signal', signal => socket.emit('video_signal', { room, signal }));
+            peer.on('stream', remoteStream => {
+                document.getElementById('remote-video').srcObject = remoteStream;
+                document.getElementById('remote-video').style.display = 'block';
+            });
+	peer.signal(data.signal);
+        });
         .catch(err => {
             console.error('Error al acceder a la cámara/micrófono:', err);
             alert('No se pudo iniciar la videollamada. Asegurate de dar permisos.');
         });
-}
+} else {
+        peer.signal(data.signal);
+    }
+});
 
 function stopVideoCall() {
     if (localStream) {

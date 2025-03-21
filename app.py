@@ -20,6 +20,8 @@ games = {}  # {room: {'board': list, 'turn': str, 'time_white': float, 'time_bla
 wallets = {}  # {sid: float}
 available_players = {}  # {sid: {'username': str, 'chosen_color': str}}
 
+DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
+
 initial_board = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
     ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -350,7 +352,8 @@ def on_move(data):
         turn = games[room]['turn']
         piece = board[start_row][start_col]
         player_color = players[room][sid]['color']
-
+        print(f"Turno actual: {turn}, Color del jugador: {player_color}")
+        
         if turn != player_color:
             print(f"Movimiento inválido: No es el turno de {player_color}")
             return
@@ -564,10 +567,10 @@ def on_accept_conditions(data):
 def on_chat_message(data):
     room = data['room']
     sid = request.sid
-    if room in players and sid in players[room]:
-        message = data['message']
-        color = players[room][sid]['color']
-        socketio.emit('new_message', {'color': color, 'message': message}, room=room)
+    message = data['message']
+    color = players[room][sid]['color']
+    print(f"Mensaje en {room} de {sid} ({color}): {message}")
+    socketio.emit('new_message', {'color': color, 'message': message}, room=room)
 
 @socketio.on('audio_message')
 def on_audio_message(data):
@@ -582,11 +585,12 @@ def on_audio_message(data):
 def on_video_signal(data):
     room = data['room']
     sid = request.sid
-    if room in players and sid in players[room]:
-        signal = data['signal']
-        for player_sid in players[room]:
-            if player_sid != sid:
-                emit('video_signal', {'signal': signal}, to=player_sid)
+    signal = data['signal']
+    print(f"Señal WebRTC recibida de {sid} en {room}")
+    for player_sid in players[room]:
+        if player_sid != sid:
+            print(f"Enviando señal a {player_sid}")
+            emit('video_signal', {'signal': signal}, to=player_sid)
 
 @socketio.on('video_stop')
 def on_video_stop(data):
@@ -733,7 +737,7 @@ if __name__ == '__main__':
     print("Limpiando players y games al inicio...")
     players.clear()
     games.clear()
-    conn = sqlite3.connect('/opt/render/project/src/users.db')
+    conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
     
     # Crear tabla users si no existe
