@@ -12,7 +12,7 @@ import os
 app = Flask(__name__)
 app.secret_key = 'Ma730yIan'  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
-sdk = mercadopago.SDK("APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132")  # Access Token
+sdk = mercadopago.SDK(os.getenv("MERCADOPAGO_ACCESS_TOKEN", "APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132"))  # Access Token
 
 # Variables Globales
 players = {}  # {room: {sid: {'color': str, 'chosen_color': str, 'bet': int, 'enable_bet': bool}}}
@@ -168,6 +168,19 @@ def update_timer(room):
                 del players[room]
 
 # Rutas HTTP
+
+@app.route('/success')
+def success():
+    return jsonify({'status': 'success'})
+
+@app.route('/failure')
+def failure():
+    return jsonify({'status': 'failure'})
+
+@app.route('/pending')
+def pending():
+    return jsonify({'status': 'pending'})
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -229,7 +242,10 @@ def get_avatar():
 # Eventos Socket.IO - Conexión y Desconexión
 @socketio.on('connect')
 def on_connect():
-    print(f"Cliente conectado: {request.sid}")
+    sid = request.sid
+    print(f"Cliente conectado: {sid}")
+    if sid not in wallets:
+        wallets[sid] = 0  # Inicializar billetera solo cuando un cliente se conecta
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -717,7 +733,7 @@ if __name__ == '__main__':
     print("Limpiando players y games al inicio...")
     players.clear()
     games.clear()
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('/opt/render/project/src/users.db')
     c = conn.cursor()
     
     # Crear tabla users si no existe
