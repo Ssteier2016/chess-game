@@ -13,7 +13,7 @@ import chess
 
 # Configuración Inicial
 app = Flask(__name__)
-app.secret_key = os.getenv("Ma730yIan")  # Cambia esto por una clave secreta fuerte
+app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
@@ -251,16 +251,16 @@ def register():
     if not username or not password:
         return jsonify({'error': 'Usuario y contraseña requeridos'}), 400
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    avatar_path = 'default-avatar.png'
+    avatar_path = '/static/default-avatar.png'
     if avatar:
         # Crear el directorio static/avatars si no existe
         avatar_dir = os.path.join(app.root_path, 'static', 'avatars')
         if not os.path.exists(avatar_dir):
             os.makedirs(avatar_dir)
         # Guardar el archivo con un nombre único
-        avatar_filename = f"{username}_{avatar.filename}"
-        avatar_path = os.path.join('static', 'avatars', avatar_filename)
-        avatar.save(avatar_path)  # Guardar la imagen en el servidor
+        avatar_filename = f"{username}_avatar{os.path.splitext(avatar.filename)[1]}"
+        avatar_path = f"/static/{avatar_filename}"
+        avatar.save(os.path.join('static', avatar_filename))
         print(f"Avatar guardado en: {avatar_path}")
     try:
         conn = sqlite3.connect(DATABASE_PATH)
@@ -290,7 +290,7 @@ def on_login(data):
     password = data['password']
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
-    c.execute('SELECT password, avatar FROM users WHERE username = ?', (username,))
+    c.execute('SELECT password FROM users WHERE username = ?', (username,))
     result = c.fetchone()
     conn.close()
     if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
@@ -298,7 +298,7 @@ def on_login(data):
         sessions[sid] = username  # Guardar username en sessions con el sid
         online_players[sid] = {'username': username, 'avatar': avatar}
         emit('login_success', {'username': username}, to=sid)
-        online_players[sid] = {'username': username, 'avatar': 'default-avatar.png'}  # Actualizar jugadores en línea
+        online_players[sid] = {'username': username, 'avatar': '/static/default-avatar.png'}  # Actualizar jugadores en línea
         emit('online_players_update', list(online_players.values()), broadcast=True)
     else:
         emit('login_error', {'error': 'Usuario o contraseña incorrectos'}, to=sid)
@@ -856,10 +856,13 @@ def on_deposit_request(data):
 def on_check_deposit(data):
     sid = request.sid
     username = data.get('username')  # Obtener username de la sesión
+    print(f"Verificando depósito para {username}, SID: {sid}")
     if not username or username != sessions.get(sid):
+        print(f"Sesión inválida para SID: {sid}")
         emit('error', {'message': 'Sesión inválida'}, to=sid)
         return
-    payment = sdk.payment().search({'external_reference': username, 'status': 'approved'})    
+    payment = sdk.payment().search({'external_reference': username, 'status': 'approved'}) 
+    print(f"Resultado de búsqueda de pago: {payment}")   
     if payment['results']:
         amount = payment['results'][0]['transaction_amount']
         wallets[username] = wallets.get(username, 0) + amount

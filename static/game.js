@@ -449,7 +449,8 @@ socket.on('deposit_url', (data) => {
         autoOpen: true,
         onClose: () => {
             console.log(`Checkout cerrado, verificando depósito para ${username}`);
-            socket.emit('check_deposit', { preference_id: data.preference_id, username: username });
+            socket.emit('check_deposit', { username: username });
+            setTimeout(() => socket.emit('check_deposit', { username: username }), 5000); // Reintentar después de 5 segundos
         }
     });
 });
