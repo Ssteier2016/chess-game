@@ -312,6 +312,14 @@ function depositMoney() {
     }
 }
 
+function requestDeposit() {
+    const amount = prompt("Monto a depositar:");
+    if (amount) socket.emit('deposit_request', { amount: parseFloat(amount) });
+}
+socket.on('deposit_url', (data) => {
+    window.open(`https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=${data.preference_id}`, '_blank');
+});
+
 function withdrawMoney() {
     const amount = parseInt(document.getElementById('withdraw-amount').value) || walletBalance;
     if (amount > 0 && amount <= walletBalance) {
@@ -573,6 +581,11 @@ socket.on('game_loaded', data => {
 });
 
 socket.on('wallet_update', data => updateWalletBalance(data.balance));
+
+socket.on('wallet_update', (data) => {
+    console.log(`Saldo actualizado: ${data.balance}`);
+    alert(`Nuevo saldo: ${data.balance} ARS`);
+});
 
 socket.on('wallet_balance', data => updateWalletBalance(data.balance));
 

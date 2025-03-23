@@ -17,7 +17,7 @@ app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')  # Cambia esto por una cla
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
-sdk = mercadopago.SDK("APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132")  # Access Token
+sdk = mercadopago.SDK("TEST-7030946997237677-031704-0d76aa7f3f9dc1968b5eb9a39b79b306-320701222")  # Access Token
 
 # Variables Globales
 sessions = {}  # Almacena sid -> username
