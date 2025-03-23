@@ -365,18 +365,25 @@ def on_join(data):
     enable_bet = data.get('enableBet', False)
     is_public = data.get('isPublic', True)
     view_cost = data.get('viewCost', 0) if not is_public else 0
-    join_room(room)
-
+    
     username = sessions.get(sid)
+    if not username:
+        emit('error', {'message': 'Debes iniciar sesión'}, to=sid)
+        return
+
     print(f"Jugador {sid} intentando unirse a {room}. Apostar: {enable_bet}, Monto: {bet}")
     current_balance = load_wallet(username) if username else 0
     if enable_bet and current_balance < bet:
         emit('error', {'message': 'Fondos insuficientes para la apuesta'}, to=sid)
-        leave_room(room)
-        return
+        return  # No hace falta leave_room aquí porque aún no se unió
 
+    join_room(room)
+
+    # Inicializa players[room] si no existe
     if room not in players:
         players[room] = {}
+
+    # Verifica si la sala está llena
     if len(players[room]) >= 2:
         games[room]['is_public'] = is_public
         games[room]['view_cost'] = view_cost
@@ -384,10 +391,32 @@ def on_join(data):
         leave_room(room)
         return
 
-    players[room][sid] = {'color': 'white' if len(players[room]) == 0 else 'black', 'chosen_color': chosen_color, 'bet': bet, 'enable_bet': enable_bet}
+    # Asigna color al jugador y lo agrega a players[room]
+    players[room][sid] = {
+        'color': 'white' if len(players[room]) == 0 else 'black',
+        'chosen_color': chosen_color,
+        'bet': bet,
+        'enable_bet': enable_bet,
+        'username': username  # Agregado para mantener consistencia
+    }
     emit('color_assigned', {'color': players[room][sid]['color'], 'chosenColor': chosen_color}, to=sid)
     print(f"Jugador {sid} asignado a {room} como {players[room][sid]['color']}")
 
+    # Inicializa games[room] si no existe
+    if room not in games:
+        board, turn = reset_board(room)  # Usamos tu función reset_board
+        games[room] = {
+            'board': board,
+            'turn': turn,
+            'is_public': is_public,
+            'view_cost': view_cost,
+            'time_white': timer_minutes * 60 if timer_minutes > 0 else None,
+            'time_black': timer_minutes * 60 if timer_minutes > 0 else None,
+            'last_move_time': time.time() if timer_minutes > 0 else None,
+            'bet': bet if enable_bet else 0
+        }
+
+    # Si hay dos jugadores, inicia el juego
     if len(players[room]) == 2:
         player1_sid, player2_sid = list(players[room].keys())
         p1_bet = players[room][player1_sid]['bet']
@@ -412,24 +441,26 @@ def on_join(data):
             print(f"Apuesta de ${bet_amount} deducida")
 
         emit('bet_accepted', {'bet': bet_amount}, room=room)
-        board, turn = reset_board(room)
         time_per_player = timer_minutes * 60 if timer_minutes > 0 else None
         if time_per_player:
             games[room]['time_white'] = time_per_player
             games[room]['time_black'] = time_per_player
             games[room]['last_move_time'] = time.time()
+
         player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
         socketio.emit('game_start', {
-            'board': board,
-            'turn': turn,
+            'board': games[room]['board'],
+            'turn': games[room]['turn'],
             'time_white': games[room]['time_white'] if time_per_player else None,
             'time_black': games[room]['time_black'] if time_per_player else None,
             'playerColors': player_colors
         }, room=room)
-        print(f"Juego iniciado en {room} con turno inicial: {turn}, apuesta: {bet_amount} ARS")
+        print(f"Juego iniciado en {room} con turno inicial: {games[room]['turn']}, apuesta: {bet_amount} ARS")
+    else:
+        emit('waiting_opponent', {'message': 'Esperando a otro jugador...'}, to=sid)
 
 @socketio.on('watch_game')
-def on_watch_game:data):
+def on_watch_game(data):
     room = data['room']
     sid = request.sid
     username = sessions.get(sid)
