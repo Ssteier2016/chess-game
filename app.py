@@ -290,15 +290,14 @@ def on_login(data):
     password = data['password']
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
-    c.execute('SELECT password FROM users WHERE username = ?', (username,))
+    c.execute('SELECT password, avatar FROM users WHERE username = ?', (username,))
     result = c.fetchone()
     conn.close()
     if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
-        avatar = result[1] or '/static/default-avatar.png'
         sessions[sid] = username  # Guardar username en sessions con el sid
-        online_players[sid] = {'username': username, 'avatar': avatar}
+        avatar = result[1] or '/static/default-avatar.png'
         emit('login_success', {'username': username}, to=sid)
-        online_players[sid] = {'username': username, 'avatar': '/static/default-avatar.png'}  # Actualizar jugadores en línea
+        online_players[sid] = {'username': username, 'avatar': avatar}
         emit('online_players_update', list(online_players.values()), broadcast=True)
     else:
         emit('login_error', {'error': 'Usuario o contraseña incorrectos'}, to=sid)
