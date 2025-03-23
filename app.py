@@ -26,21 +26,22 @@ games = {}  # {room: {'board': list, 'turn': str, 'time_white': float, 'time_bla
 online_players = {}  # Lista de jugadores en línea
 available_players = {}  # {sid: {'username': str, 'chosen_color': str}}
 
-initial_board = [
-    ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
-    ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
-    ['.', '.', '.', '.', '.', '.', '.', '.'],
-    ['.', '.', '.', '.', '.', '.', '.', '.'],
-    ['.', '.', '.', '.', '.', '.', '.', '.'],
-    ['.', '.', '.', '.', '.', '.', '.', '.'],
-    ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
-    ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
-]
-
+def reset_board(room):
+    board = [
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['.', '.', '.', '.', '.', '.', '.', '.'],
+        ['.', '.', '.', '.', '.', '.', '.', '.'],
+        ['.', '.', '.', '.', '.', '.', '.', '.'],
+        ['.', '.', '.', '.', '.', '.', '.', '.'],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+    ]
+    return board, 'white'
 # Funciones de Lógica del Ajedrez
 def reset_board(room):
     games[room] = {
-        'board': [row[:] for row in initial_board],
+        'board': [row[:] for row in reset_board],
         'turn': 'white',
         'time_white': None,
         'time_black': None,
