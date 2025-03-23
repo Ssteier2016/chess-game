@@ -4,6 +4,6 @@ python-socketio==5.8.0
 bcrypt
 eventlet==0.33.3
 requests==2.28.1
-mercadopago==2.1.2
+mercadopago==2.2.3
 gunicorn
 python-chess
