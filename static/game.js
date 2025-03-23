@@ -26,7 +26,7 @@ const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
-const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' }); // Clave de test
+const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' }); // Clave pública de test
 
 // Funciones de Interfaz y Juego
 function joinRoom() {
@@ -35,7 +35,7 @@ function joinRoom() {
     const color = document.getElementById('color-select').value;
     const enableBet = document.getElementById('enable-bet').checked;
     const betAmount = enableBet ? parseInt(document.getElementById('bet-amount').value) || 0 : 0;
-	const isPublic = document.getElementById('public-game').checked;
+    const isPublic = document.getElementById('public-game').checked;
     const viewCost = isPublic ? 0 : parseInt(document.getElementById('view-cost').value) || 0;
 
     if (!room) {
@@ -59,7 +59,6 @@ function playWithBot() {
 function watchGame(room) {
     socket.emit('watch_game', { room });
 }
-// Agregar botón en la lista de jugadores en línea o un nuevo apartado
 
 function renderOnlinePlayers(players) {
     const onlineDiv = document.getElementById('online-players');
@@ -71,6 +70,7 @@ function renderOnlinePlayers(players) {
         img.style.width = '20px';
         img.style.height = '20px';
         img.style.marginRight = '5px';
+        img.onerror = () => img.src = '/static/default-avatar.png'; // Fallback si falla el avatar
         p.appendChild(img);
         p.appendChild(document.createTextNode(player.username));
         onlineDiv.appendChild(p);
@@ -105,7 +105,6 @@ function goBackFromWaitlist() {
     document.getElementById('waitlist').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
-    // Ocultar otras secciones dentro de .container
     document.getElementById('chessboard').style.display = 'none';
     document.getElementById('chat').style.display = 'none';
     document.getElementById('game-buttons').style.display = 'none';
@@ -119,7 +118,6 @@ function goBackFromPrivateChat() {
     document.getElementById('private-chat').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
-    // Ocultar otras secciones dentro de .container
     document.getElementById('chessboard').style.display = 'none';
     document.getElementById('chat').style.display = 'none';
     document.getElementById('game-buttons').style.display = 'none';
@@ -311,7 +309,7 @@ function startVideoCall() {
             document.getElementById('local-video').style.display = 'block';
             document.getElementById('start-video').style.display = 'none';
             document.getElementById('stop-video').style.display = 'inline';
-            peer = new SimplePeer({ initiator: !room.includes('bot'), stream }); // Bot no inicia videollamada
+            peer = new SimplePeer({ initiator: !room.includes('bot'), stream });
             peer.on('signal', data => {
                 console.log('Enviando señal WebRTC:', data);
                 socket.emit('video_signal', { room, signal: data });
@@ -351,7 +349,7 @@ function stopVideoCall() {
 function depositMoney() {
     const amount = parseInt(document.getElementById('deposit-amount').value);
     if (amount >= 100) {
-        socket.emit('deposit_request', { amount, username: username });
+        socket.emit('deposit_request', { amount, username });
         console.log(`Solicitud de depósito enviada: $${amount} ARS para ${username}`);
     } else {
         alert('El monto mínimo para recargar es $100 ARS.');
@@ -359,18 +357,25 @@ function depositMoney() {
 }
 
 function withdrawMoney() {
-    if (walletBalance > 0) {
-        socket.emit('withdraw_request', { amount: walletBalance });
-        console.log(`Solicitud de retiro enviada: $${walletBalance} ARS`);
+    const amount = parseInt(document.getElementById('withdraw-amount').value) || walletBalance;
+    if (amount > 0 && amount <= walletBalance) {
+        socket.emit('withdraw_request', { amount });
+        console.log(`Solicitud de retiro enviada: $${amount} ARS`);
     } else {
-        alert('No tenés saldo para retirar.');
+        alert('Cantidad inválida o fondos insuficientes.');
+        console.log(`Error: Retiro inválido. Monto: ${amount}, Saldo: ${walletBalance}`);
     }
 }
 
 function updateWalletBalance(balance) {
     walletBalance = balance;
-    document.getElementById('wallet-balance').textContent = `Saldo: $${balance} ARS`;
-    console.log('Saldo actualizado:', balance);
+    const walletElement = document.getElementById('wallet-balance');
+    if (walletElement) {
+        walletElement.textContent = `Saldo: $${balance} ARS`;
+        console.log('Saldo actualizado:', balance);
+    } else {
+        console.error('Elemento #wallet-balance no encontrado');
+    }
 }
 
 // Funciones de Guardado y Abandono
@@ -404,6 +409,11 @@ function loadGame(gameName) {
 }
 
 // Funciones de Chat Privado
+function selectOpponent(opponentSid) {
+    socket.emit('select_opponent', { opponent_sid: opponentSid });
+    console.log('Seleccionando oponente:', opponentSid);
+}
+
 function sendPrivateMessage() {
     const input = document.getElementById('private-chat-input');
     const message = input.value.trim();
@@ -417,25 +427,59 @@ function sendPrivateMessage() {
 }
 
 function acceptConditions() {
-    const enableBet = document.getElementById('private-enable-bet').checked;
-    const betAmount = enableBet ? parseInt(document.getElementById('private-bet-amount').value) || 0 : 0;
+    const enableBet = document.getElementById('private-enable-bet')?.checked || false;
+    const betAmount = enableBet ? parseInt(document.getElementById('private-bet-amount')?.value) || 0 : 0;
+    if (enableBet && (betAmount < 100 || betAmount > walletBalance)) {
+        alert('La apuesta debe ser mínimo $100 ARS y no mayor a tu saldo.');
+        return;
+    }
     socket.emit('accept_conditions', { room, bet: betAmount, enableBet });
     console.log(`Enviando aceptación de condiciones: bet=${betAmount}, enableBet=${enableBet}`);
+}
+
+// Funciones de Autenticación
+function login() {
+    const usernameInput = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    socket.emit('login', { username: usernameInput, password });
+    console.log('Intentando login para', usernameInput);
+}
+
+function register() {
+    const formData = new FormData(document.getElementById('register-form'));
+    fetch('/register', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                username = formData.get('username');
+                document.getElementById('login-register').style.display = 'none';
+                document.querySelector('.container').style.display = 'flex';
+                document.getElementById('room-selection').style.display = 'block';
+                fetch(`/get_avatar?username=${username}`).then(res => res.json()).then(data => {
+                    currentAvatar = data.avatar;
+                    console.log('Avatar cargado tras registro:', currentAvatar);
+                });
+            } else {
+                document.getElementById('register-error').textContent = data.error;
+            }
+        })
+        .catch(err => console.error('Error en registro:', err));
 }
 
 // Eventos Socket.IO
 socket.on('connect', () => {
     if (username) {
-        socket.emit('join_user_room', { username: username });
-        socket.emit('get_wallet_balance', { username: username });
+        socket.emit('join_user_room', { username });
+        socket.emit('get_wallet_balance', { username });
     }
+    console.log('Conectado al servidor');
 });
 
-socket.on('online_players_update', (players) => {
+socket.on('online_players_update', players => {
     renderOnlinePlayers(players);
 });
 
-socket.on('global_message', (data) => {
+socket.on('global_message', data => {
     const globalChat = document.getElementById('global-chat');
     const msg = document.createElement('div');
     msg.textContent = `${data.username}: ${data.message}`;
@@ -443,30 +487,30 @@ socket.on('global_message', (data) => {
     globalChat.scrollTop = globalChat.scrollHeight;
 });
 
-socket.on('deposit_url', (data) => {
+socket.on('deposit_url', data => {
     mp.checkout({
         preference: { id: data.preference_id },
         autoOpen: true,
         onClose: () => {
             console.log(`Checkout cerrado, verificando depósito para ${username}`);
-            socket.emit('check_deposit', { username: username });
-            setTimeout(() => socket.emit('check_deposit', { username: username }), 5000); // Reintentar después de 5 segundos
+            socket.emit('check_deposit', { username });
+            setTimeout(() => socket.emit('check_deposit', { username }), 5000);
         }
     });
 });
 
-socket.on('withdraw_success', (data) => {
+socket.on('withdraw_success', data => {
     alert(`Retiro exitoso: $${data.amount} ARS transferidos.`);
-    updateWalletBalance(0);
+    updateWalletBalance(walletBalance - data.amount);
 });
 
-socket.on('color_assigned', (data) => {
+socket.on('color_assigned', data => {
     myColor = data.color;
     playerColors[data.color] = data.chosenColor;
     console.log(`Color asignado: ${data.color}, Color elegido: ${data.chosenColor}`);
 });
 
-socket.on('game_start', (data) => {
+socket.on('game_start', data => {
     board = data.board;
     turn = data.turn;
     timeWhite = data.time_white;
@@ -474,7 +518,6 @@ socket.on('game_start', (data) => {
     playerColors = data.playerColors || data.players;
     previousBoard = JSON.parse(JSON.stringify(board));
     console.log('Juego iniciado con:', { board, turn, timeWhite, timeBlack, playerColors, myColor });
-    console.log(`Es mi turno: ${myColor === turn}`);
     roomSelection.style.display = 'none';
     chessboard.style.display = 'grid';
     chat.style.display = 'block';
@@ -487,24 +530,21 @@ socket.on('game_start', (data) => {
     if (timeWhite !== null && timeBlack !== null) startTimer();
 });
 
-socket.on('update_board', (data) => {
+socket.on('update_board', data => {
     board = data.board;
     turn = data.turn;
-    console.log(`Tablero actualizado, turno: ${turn}, mi color: ${myColor}`);
-    console.log(`Es mi turno: ${myColor === turn}`);
     previousBoard = JSON.parse(JSON.stringify(board));
     renderBoard();
 });
 
-socket.on('timer_update', (data) => {
-    console.log('Recibido timer_update:', data);
+socket.on('timer_update', data => {
     timeWhite = data.time_white;
     timeBlack = data.time_black;
     lastUpdateTime = Date.now();
     updateTimers();
 });
 
-socket.on('new_message', (data) => {
+socket.on('new_message', data => {
     const messages = document.getElementById('chat-messages');
     const message = document.createElement('div');
     message.textContent = `${data.color}: ${data.message}`;
@@ -513,7 +553,7 @@ socket.on('new_message', (data) => {
     console.log('Mensaje recibido:', data);
 });
 
-socket.on('audio_message', (data) => {
+socket.on('audio_message', data => {
     const messages = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
     if (data.color) messageDiv.textContent = `${data.color}: `;
@@ -526,8 +566,7 @@ socket.on('audio_message', (data) => {
     console.log('Mensaje de audio recibido en', room);
 });
 
-socket.on('video_signal', (data) => {
-    console.log('Señal WebRTC recibida:', data.signal);
+socket.on('video_signal', data => {
     if (!peer) {
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then(stream => {
@@ -537,59 +576,47 @@ socket.on('video_signal', (data) => {
                 document.getElementById('start-video').style.display = 'none';
                 document.getElementById('stop-video').style.display = 'inline';
                 peer = new SimplePeer({ stream });
-                peer.on('signal', signal => {
-                    socket.emit('video_signal', { room, signal });
-                    console.log('Enviando señal WebRTC de respuesta:', signal);
-                });
+                peer.on('signal', signal => socket.emit('video_signal', { room, signal }));
                 peer.on('stream', remoteStream => {
-                    console.log('Recibiendo stream remoto');
                     document.getElementById('remote-video').srcObject = remoteStream;
                     document.getElementById('remote-video').style.display = 'block';
                 });
-                peer.on('error', err => console.error('Error en SimplePeer:', err));
                 peer.signal(data.signal);
-            })
-            .catch(err => {
-                console.error('Error al acceder a la cámara/micrófono:', err);
-                alert('No se pudo iniciar la videollamada. Asegurate de dar permisos.');
             });
     } else {
         peer.signal(data.signal);
     }
 });
 
-socket.on('video_stop', () => {
-    stopVideoCall();
-    console.log('Videollamada detenida por el oponente');
-});
+socket.on('video_stop', () => stopVideoCall());
 
-socket.on('player_left', (data) => {
+socket.on('player_left', data => {
     alert(data.message);
     goBack();
 });
 
-socket.on('game_over', (data) => {
+socket.on('game_over', data => {
     alert(data.message);
     if (data.new_balance !== undefined) updateWalletBalance(data.new_balance);
     goBack();
 });
 
-socket.on('check', (data) => alert(data.message));
+socket.on('check', data => alert(data.message));
 
-socket.on('resigned', (data) => {
+socket.on('resigned', data => {
     alert(data.message);
     if (data.new_balance !== undefined) updateWalletBalance(data.new_balance);
     goBack();
 });
 
-socket.on('error', (data) => {
+socket.on('error', data => {
     console.log('Error recibido:', data.message);
     alert(data.message);
 });
 
-socket.on('game_saved', (data) => alert(data.message));
+socket.on('game_saved', data => alert(data.message));
 
-socket.on('saved_games_list', (data) => {
+socket.on('saved_games_list', data => {
     savedGamesDiv.innerHTML = '';
     data.games.forEach(game => {
         const button = document.createElement('button');
@@ -600,7 +627,7 @@ socket.on('saved_games_list', (data) => {
     console.log('Lista de partidas guardadas recibida:', data.games);
 });
 
-socket.on('game_loaded', (data) => {
+socket.on('game_loaded', data => {
     board = data.board;
     turn = data.turn;
     room = data.room;
@@ -618,49 +645,32 @@ socket.on('game_loaded', (data) => {
     alert(`Partida "${data.game_name}" cargada exitosamente en la sala ${room}`);
 });
 
-socket.on('wallet_update', (data) => updateWalletBalance(data.balance));
+socket.on('wallet_update', data => updateWalletBalance(data.balance));
 
-socket.on('wallet_update', (data) => {
-    console.log('Evento wallet_update recibido:', data);
-    updateWalletBalance(data.balance);
+socket.on('wallet_balance', data => updateWalletBalance(data.balance));
+
+socket.on('bet_accepted', data => {
+    alert(data.bet > 0 ? `Apuesta de $${data.bet} ARS aceptada.` : `Partida sin apuesta iniciada.`);
 });
 
-function updateWalletBalance(balance) {
-    walletBalance = balance;
-    const walletElement = document.getElementById('wallet-balance');
-    if (walletElement) {
-        walletElement.textContent = `Saldo: $${balance} ARS`;
-        console.log('Saldo actualizado:', balance);
-    } else {
-        console.error('Elemento #wallet-balance no encontrado');
-    }
-}
+socket.on('waiting_opponent', data => alert(data.message));
 
-socket.on('bet_accepted', (data) => {
-    alert(data.bet > 0 ? `Apuesta de $${data.bet} ARS aceptada por ambos jugadores en la sala ${room}.` : `Partida sin apuesta iniciada en la sala ${room}.`);
-});
-
-socket.on('waitlist_update', (data) => {
+socket.on('waitlist_update', data => {
     const waitlistDiv = document.getElementById('waitlist-players');
     waitlistDiv.innerHTML = '';
-    console.log('Actualización de lista de espera recibida:', data);
-    if (data && data.players && data.players.length > 0) {
+    if (data.players && data.players.length > 0) {
         data.players.forEach(player => {
-            if (player.username !== username) { // No mostrar al usuario actual
+            if (player.username !== username) {
                 const div = document.createElement('div');
                 div.className = 'player-item';
                 const img = document.createElement('img');
                 img.src = player.avatar || '/static/default-avatar.png';
-                img.alt = `${player.username}'s avatar`;
-                img.onerror = () => img.src = '/static/default-avatar.png'; // Fallback si el avatar falla
+                img.onerror = () => img.src = '/static/default-avatar.png';
                 const span = document.createElement('span');
                 span.textContent = `${player.username} (${player.chosen_color})`;
                 div.appendChild(img);
                 div.appendChild(span);
-                div.onclick = () => {
-                    console.log('Seleccionando oponente:', player.username);
-                    socket.emit('select_opponent', { opponent_sid: player.sid });
-                };
+                div.onclick = () => selectOpponent(player.sid);
                 waitlistDiv.appendChild(div);
             }
         });
@@ -669,73 +679,53 @@ socket.on('waitlist_update', (data) => {
     }
 });
 
-socket.on('private_chat_start', (data) => {
+socket.on('private_chat_start', data => {
     room = data.room;
     document.getElementById('waitlist').style.display = 'none';
     document.getElementById('private-chat').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
-    console.log(`Iniciando chat privado en sala ${room} con oponente ${data.opponent}`);
     document.getElementById('private-chat-messages').innerHTML = `<p>Conectado con ${data.opponent}</p>`;
 });
 
-socket.on('private_message', (data) => {
+socket.on('private_message', data => {
     const messages = document.getElementById('private-chat-messages');
     const message = document.createElement('div');
     message.textContent = `${data.color}: ${data.message}`;
     messages.appendChild(message);
     messages.scrollTop = messages.scrollHeight;
-    console.log('Mensaje privado recibido:', data);
 });
 
-// Eventos del DOM
-document.getElementById('login-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-const usernameInput = formData.get('username');
-    const password = formData.get('password');
-    socket.emit('login', { username: usernameInput, password: password });
-});
-       socket.on('login_success', (data) => {
+socket.on('login_success', data => {
     username = data.username;
     document.getElementById('login-register').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
-    fetch(`/get_avatar?username=${username}`)
-        .then(response => response.json())
-        .then(data => {
-            currentAvatar = data.avatar;
-            console.log('Avatar cargado para', username, ':', currentAvatar);
-        });
+    fetch(`/get_avatar?username=${username}`).then(res => res.json()).then(data => {
+        currentAvatar = data.avatar;
+        console.log('Avatar cargado:', currentAvatar);
+    });
 });
 
-socket.on('login_error', (data) => {
+socket.on('login_error', data => {
     document.getElementById('login-error').textContent = data.error;
 });
 
-document.getElementById('register-form').addEventListener('submit', (e) => {
+// Eventos del DOM
+document.getElementById('login-form')?.addEventListener('submit', e => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    fetch('/register', { method: 'POST', body: formData })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                username = formData.get('username');
-                document.getElementById('login-register').style.display = 'none';
-                document.querySelector('.container').style.display = 'flex';
-                document.getElementById('room-selection').style.display = 'block';
-                document.getElementById('waitlist').style.display = 'none';
-                document.getElementById('private-chat').style.display = 'none';
-                fetch(`/get_avatar?username=${username}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        currentAvatar = data.avatar;
-                        console.log('Avatar cargado para', username, ':', currentAvatar);
-                    });
-            } else {
-                document.getElementById('register-error').textContent = data.error || 'Error al registrar';
-            }
-        })
-        .catch(error => console.error('Error en registro:', error));
+    const usernameInput = formData.get('username');
+    const password = formData.get('password');
+    login(usernameInput, password);
+});
+
+document.getElementById('register-form')?.addEventListener('submit', e => {
+    e.preventDefault();
+    register();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (username) socket.emit('get_wallet_balance', { username });
 });
 
 window.onload = () => {

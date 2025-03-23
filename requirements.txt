@@ -1,7 +1,9 @@
-flask
-flask-socketio
+Flask==2.3.2
+Flask-SocketIO==5.3.4
+python-socketio==5.8.0
 bcrypt
-eventlet
-mercadopago
+eventlet==0.33.3
+requests==2.28.1
+mercadopago==2.1.2
 gunicorn
 python-chess
