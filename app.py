@@ -294,7 +294,7 @@ def on_login(data):
     result = c.fetchone()
     conn.close()
     if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
-        avatar = result[1] or 'default-avatar.png'
+        avatar = result[1] or '/static/default-avatar.png'
         sessions[sid] = username  # Guardar username en sessions con el sid
         online_players[sid] = {'username': username, 'avatar': avatar}
         emit('login_success', {'username': username}, to=sid)
@@ -826,8 +826,8 @@ def on_load_game(data):
 def on_deposit_request(data):
     sid = request.sid
     amount = data['amount']
-    username = sessions.get(sid)  # Obtener username de la sesión
-    if not username:
+    username = data.get('username')  # Obtener username de la sesión
+    if not username or username != sessions.get(sid):        
         emit('error', {'message': 'Debes iniciar sesión primero'}, to=sid)
         return
     preference = {
@@ -855,8 +855,8 @@ def on_deposit_request(data):
 @socketio.on('check_deposit')
 def on_check_deposit(data):
     sid = request.sid
-    username = sessions.get(sid)  # Obtener username de la sesión
-    if not username:
+    username = data.get('username')  # Obtener username de la sesión
+    if not username or username != sessions.get(sid):
         emit('error', {'message': 'Sesión inválida'}, to=sid)
         return
     payment = sdk.payment().search({'external_reference': username, 'status': 'approved'})    
@@ -868,7 +868,8 @@ def on_check_deposit(data):
         print(f"Depósito de {amount} ARS aprobado para {username}. Nuevo saldo: {wallets[username]}")
     else:
         print(f"No se encontraron pagos aprobados para {username}")
-
+        emit('error', {'message': 'No se detectó el pago aprobado'}, to=sid)
+        
 @socketio.on('withdraw_request')
 def on_withdraw_request(data):
     sid = request.sid

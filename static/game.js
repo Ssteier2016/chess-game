@@ -351,8 +351,8 @@ function stopVideoCall() {
 function depositMoney() {
     const amount = parseInt(document.getElementById('deposit-amount').value);
     if (amount >= 100) {
-        socket.emit('deposit_request', { amount });
-        console.log(`Solicitud de depósito enviada: $${amount} ARS`);
+        socket.emit('deposit_request', { amount, username: username });
+        console.log(`Solicitud de depósito enviada: $${amount} ARS para ${username}`);
     } else {
         alert('El monto mínimo para recargar es $100 ARS.');
     }
@@ -447,7 +447,10 @@ socket.on('deposit_url', (data) => {
     mp.checkout({
         preference: { id: data.preference_id },
         autoOpen: true,
-        onClose: () => socket.emit('check_deposit', { preference_id: data.preference_id })
+        onClose: () => {
+            console.log(`Checkout cerrado, verificando depósito para ${username}`);
+            socket.emit('check_deposit', { preference_id: data.preference_id, username: username });
+        }
     });
 });
 
