@@ -243,26 +243,6 @@ def pending():
 def index():
     return render_template('index.html')
 
-@app.route('/login', methods=['POST'])
-def login():
-    username = request.form.get('username')
-    if username:
-        sid = request.sid if hasattr(request, 'sid') else None  # Solo para SocketIO, ajustar si usas Flask puro
-        if sid:
-            sessions[sid] = username
-        return {'success': True}
-        return {'success': False, 'error': 'Username requerido'}
-    password = request.form.get('password')
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute('SELECT password FROM users WHERE username = ?', (username,))
-    result = c.fetchone()
-    conn.close()
-    if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
-        session['username'] = username
-        return jsonify({'success': True})
-    return jsonify({'error': 'Usuario o contraseña incorrectos'}), 401
-
 @app.route('/register', methods=['POST'])
 def register():
     username = request.form.get('username')
@@ -303,17 +283,39 @@ def get_avatar():
     conn.close()
     return jsonify({'avatar': result[0] if result else 'default-avatar.png'})
 
+@socketio.on('login')
+def on_login(data):
+    sid = request.sid
+    username = data['username']
+    password = data['password']
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('SELECT password, avatar FROM users WHERE username = ?', (username,))
+    result = c.fetchone()
+    conn.close()
+    if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
+        avatar = result[1] or 'default-avatar.png'
+        sessions[sid] = username  # Guardar username en sessions con el sid
+        online_players[sid] = {'username': username, 'avatar': avatar}
+        emit('login_success', {'username': username}, to=sid)
+        online_players[sid] = {'username': username, 'avatar': 'default-avatar.png'}  # Actualizar jugadores en línea
+        emit('online_players_update', list(online_players.values()), broadcast=True)
+    else:
+        emit('login_error', {'error': 'Usuario o contraseña incorrectos'}, to=sid)
+
 # Eventos Socket.IO - Conexión y Desconexión
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
-    print(f"Cliente conectado: {sid}")
-    if sid not in wallets:
-        wallets[sid] = 0
+    username = sessions.get(sid)  # Obtener username de sessions
     if 'username' in session:
         online_players[sid] = {'username': session['username'], 'avatar': session.get('avatar', 'default-avatar.png')}
         emit('online_players_update', list(online_players.values()), broadcast=True)  # Inicializar billetera solo cuando un cliente se conecta
-
+    print(f"Cliente conectado: {sid}")
+    if sid not in wallets:
+        wallets[sid] = 0
+   
+    
 @socketio.on('disconnect')
 def on_disconnect():
     sid = request.sid
@@ -353,6 +355,8 @@ def on_join(data):
     chosen_color = data.get('color', '#FFFFFF')
     bet = int(data.get('bet', 0))
     enable_bet = data.get('enableBet', False)
+    is_public = data.get('isPublic', True)
+    view_cost = data.get('viewCost', 0) if not is_public else 0
     join_room(room)
 
     print(f"Jugador {sid} intentando unirse a {room}. Apostar: {enable_bet}, Monto: {bet}")
@@ -366,6 +370,8 @@ def on_join(data):
     if room not in players:
         players[room] = {}
     if len(players[room]) >= 2:
+        games[room]['is_public'] = is_public
+        games[room]['view_cost'] = view_cost
         emit('error', {'message': 'La sala está llena'}, to=sid)
         leave_room(room)
         return
@@ -412,6 +418,27 @@ def on_join(data):
         }, room=room)
         print(f"Juego iniciado en {room} con turno inicial: {turn}, apuesta: {bet_amount} ARS")
 
+@socketio.on('watch_game')
+def on_watch_game(data):
+    room = data['room']
+    sid = request.sid
+    username = sessions.get(sid)
+    if not username:
+        emit('error', {'message': 'Debes iniciar sesión'}, to=sid)
+        return
+    if room in games:
+        if games[room]['is_public']:
+            join_room(room)
+            emit('game_start', games[room], to=sid)
+        elif wallets.get(username, 0) >= games[room]['view_cost']:
+            wallets[username] -= games[room]['view_cost']
+            save_wallets(wallets)
+            emit('wallet_update', {'balance': wallets[username]}, to=sid)
+            join_room(room)
+            emit('game_start', games[room], to=sid)
+        else:
+            emit('error', {'message': 'Fondos insuficientes para ver la partida'}, to=sid)
+            
 @socketio.on('move')
 def on_move(data):
     room = data['room']
@@ -687,7 +714,12 @@ def on_move_with_bot(data):
     
 @socketio.on('global_message')
 def on_global_message(data):
-    emit('global_message', {'username': session['username'], 'message': data['message']}, broadcast=True)
+    sid = request.sid
+    username = sessions.get(sid)
+    if username:
+        emit('global_message', {'username': username, 'message': data['message']}, broadcast=True)
+    else:
+        emit('error', {'message': 'Debes iniciar sesión para usar el chat global'}, to=sid)
 
 @socketio.on('video_stop')
 def on_video_stop(data):
@@ -830,7 +862,7 @@ def on_check_deposit(data):
     payment = sdk.payment().search({'external_reference': username, 'status': 'approved'})    
     if payment['results']:
         amount = payment['results'][0]['transaction_amount']
-        wallets[username] = wallets.get(sid, 0) + amount
+        wallets[username] = wallets.get(username, 0) + amount
         save_wallets(wallets)  # Guardar después de actualizar
         emit('wallet_update', {'balance': wallets[username]}, to=sid)
         print(f"Depósito de {amount} ARS aprobado para {username}. Nuevo saldo: {wallets[username]}")

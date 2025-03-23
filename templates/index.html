@@ -613,6 +613,13 @@
                 reader.readAsDataURL(file);
             }
         }
-    </script>
+<label><input type="checkbox" id="public-game" checked> Partida Pública</label>
+    <input type="number" id="view-cost" placeholder="Costo para ver ($ARS)" min="0" step="50" disabled>
+</div>
+<script>
+    document.getElementById('public-game').addEventListener('change', (e) => {
+        document.getElementById('view-cost').disabled = e.target.checked;
+    });
+</script>
 </body>
 </html>

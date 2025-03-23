@@ -35,6 +35,8 @@ function joinRoom() {
     const color = document.getElementById('color-select').value;
     const enableBet = document.getElementById('enable-bet').checked;
     const betAmount = enableBet ? parseInt(document.getElementById('bet-amount').value) || 0 : 0;
+	const isPublic = document.getElementById('public-game').checked;
+    const viewCost = isPublic ? 0 : parseInt(document.getElementById('view-cost').value) || 0;
 
     if (!room) {
         console.log('Error: ID de sala vacío');
@@ -46,7 +48,7 @@ function joinRoom() {
     }
 
     console.log(`Intentando unirse a la sala: ${room}, apuesta: ${enableBet ? betAmount : 'sin apuesta'}`);
-    socket.emit('join', { room, timer, color, bet: betAmount, enableBet });
+    socket.emit('join', { room, timer, color, bet: betAmount, enableBet, isPublic, viewCost });
 }
 
 function playWithBot() {
@@ -54,12 +56,23 @@ function playWithBot() {
     console.log('Iniciando partida contra bot');
 }
 
+function watchGame(room) {
+    socket.emit('watch_game', { room });
+}
+// Agregar botón en la lista de jugadores en línea o un nuevo apartado
+
 function renderOnlinePlayers(players) {
     const onlineDiv = document.getElementById('online-players');
     onlineDiv.innerHTML = '<h3>Jugadores en Línea</h3>';
     players.forEach(player => {
         const p = document.createElement('p');
-        p.textContent = player.username; // Simplificado, avatar no se muestra como texto
+        const img = document.createElement('img');
+        img.src = player.avatar || '/static/default-avatar.png';
+        img.style.width = '20px';
+        img.style.height = '20px';
+        img.style.marginRight = '5px';
+        p.appendChild(img);
+        p.appendChild(document.createTextNode(player.username));
         onlineDiv.appendChild(p);
     });
 }
@@ -674,27 +687,25 @@ socket.on('private_message', (data) => {
 document.getElementById('login-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    fetch('/login', { method: 'POST', body: formData })
+const usernameInput = formData.get('username');
+    const password = formData.get('password');
+    socket.emit('login', { username: usernameInput, password: password });
+});
+       socket.on('login_success', (data) => {
+    username = data.username;
+    document.getElementById('login-register').style.display = 'none';
+    document.querySelector('.container').style.display = 'flex';
+    document.getElementById('room-selection').style.display = 'block';
+    fetch(`/get_avatar?username=${username}`)
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                username = formData.get('username');
-                document.getElementById('login-register').style.display = 'none';
-                document.querySelector('.container').style.display = 'flex';
-                document.getElementById('room-selection').style.display = 'block';
-                document.getElementById('waitlist').style.display = 'none';
-                document.getElementById('private-chat').style.display = 'none';
-                fetch(`/get_avatar?username=${username}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        currentAvatar = data.avatar;
-                        console.log('Avatar cargado para', username, ':', currentAvatar);
-                    });
-            } else {
-                document.getElementById('login-error').textContent = data.error || 'Error al iniciar sesión';
-            }
-        })
-        .catch(error => console.error('Error en login:', error));
+            currentAvatar = data.avatar;
+            console.log('Avatar cargado para', username, ':', currentAvatar);
+        });
+});
+
+socket.on('login_error', (data) => {
+    document.getElementById('login-error').textContent = data.error;
 });
 
 document.getElementById('register-form').addEventListener('submit', (e) => {
