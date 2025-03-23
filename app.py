@@ -26,7 +26,7 @@ games = {}  # {room: {'board': list, 'turn': str, 'time_white': float, 'time_bla
 online_players = {}  # Lista de jugadores en línea
 available_players = {}  # {sid: {'username': str, 'chosen_color': str}}
 
-def reset_board(room):
+def reset_board(room=None):  # Unificada y simplificada
     board = [
         ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
         ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -38,16 +38,6 @@ def reset_board(room):
         ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
     ]
     return board, 'white'
-# Funciones de Lógica del Ajedrez
-def reset_board(room):
-    games[room] = {
-        'board': [row[:] for row in reset_board],
-        'turn': 'white',
-        'time_white': None,
-        'time_black': None,
-        'last_move_time': None
-    }
-    return games[room]['board'], games[room]['turn']
 
 def is_white(piece):
     return piece.isupper()
@@ -129,7 +119,7 @@ def is_in_check(board, color):
     for row in range(8):
         for col in range(8):
             piece = board[row][col]
-            if piece != '.' and (color == 'white' and is_black(piece)) or (color == 'black' and is_white(piece)):
+            if piece != '.' and ((color == 'white' and is_black(piece)) or (color == 'black' and is_white(piece))):
                 if is_valid_move(piece, row, col, king_row, king_col, board):
                     return True
     return False
@@ -180,14 +170,16 @@ def update_timer(room):
         socketio.emit('timer_update', {'time_white': games[room]['time_white'], 'time_black': games[room]['time_black']}, room=room)
         if games[room]['time_white'] <= 0:
             socketio.emit('game_over', {'message': '¡Tiempo agotado! Gana negras'}, room=room)
-            reset_board(room)
             if room in players:
                 del players[room]
+            if room in games:
+                del games[room]
         elif games[room]['time_black'] <= 0:
             socketio.emit('game_over', {'message': '¡Tiempo agotado! Gana blancas'}, room=room)
-            reset_board(room)
             if room in players:
                 del players[room]
+            if room in games:
+                del games[room]
 
 def init_db():
     conn = sqlite3.connect(DATABASE_PATH)
@@ -257,24 +249,22 @@ def register():
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     avatar_path = '/static/default-avatar.png'
     if avatar:
-        # Crear el directorio static/avatars si no existe
         avatar_dir = os.path.join(app.root_path, 'static', 'avatars')
         if not os.path.exists(avatar_dir):
             os.makedirs(avatar_dir)
-        # Guardar el archivo con un nombre único
         avatar_filename = f"{username}_avatar{os.path.splitext(avatar.filename)[1]}"
-        avatar_path = f"/static/avatars/{avatar_filename}"  # Ajustada la ruta para consistencia
+        avatar_path = f"/static/avatars/{avatar_filename}"
         avatar.save(os.path.join(app.root_path, 'static', 'avatars', avatar_filename))
         print(f"Avatar guardado en: {avatar_path}")
     try:
         conn = sqlite3.connect(DATABASE_PATH)
         c = conn.cursor()
         c.execute('INSERT INTO users (username, password, avatar) VALUES (?, ?, ?)', (username, hashed_password, avatar_path))
-        c.execute('INSERT OR IGNORE INTO wallets (username, balance) VALUES (?, 0)', (username,))  # Inicializar billetera
+        c.execute('INSERT OR IGNORE INTO wallets (username, balance) VALUES (?, 0)', (username,))
         conn.commit()
         conn.close()
         session['username'] = username
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'username': username, 'avatar': avatar_path})
     except sqlite3.IntegrityError:
         return jsonify({'error': 'El usuario ya existe'}), 400
 
@@ -299,10 +289,10 @@ def on_login(data):
     result = c.fetchone()
     conn.close()
     if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
-        session['username'] = username  # Guardar en flask.session
         sessions[sid] = username
+        session['username'] = username  # Sincronizar con Flask session
         avatar = result[1] or '/static/default-avatar.png'
-        emit('login_success', {'username': username}, to=sid)
+        emit('login_success', {'username': username, 'avatar': avatar}, to=sid)
         online_players[sid] = {'username': username, 'avatar': avatar}
         socketio.emit('online_players_update', list(online_players.values()))
     else:
@@ -312,9 +302,9 @@ def on_login(data):
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
-    username = sessions.get(sid)
-    if 'username' in session:
-        username = session['username']
+    username = session.get('username') or sessions.get(sid)
+    if username:
+        sessions[sid] = username  # Asegurar que el SID esté asociado al username
         conn = sqlite3.connect(DATABASE_PATH)
         c = conn.cursor()
         c.execute('SELECT avatar FROM users WHERE username = ?', (username,))
@@ -322,17 +312,16 @@ def on_connect():
         avatar = result[0] if result else '/static/default-avatar.png'
         conn.close()
         online_players[sid] = {'username': username, 'avatar': avatar}
-        emit('online_players_update', list(online_players.values()))
+        socketio.emit('online_players_update', list(online_players.values()))
+        emit('wallet_update', {'balance': load_wallet(username)}, to=sid)  # Enviar saldo al conectar
     print(f"Cliente conectado: {sid}")
 
 @socketio.on('disconnect')
 def on_disconnect():
     sid = request.sid
-    # Limpieza de lista de espera
     if sid in available_players:
         del available_players[sid]
         socketio.emit('waitlist_update', {'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color']} for s, info in available_players.items()]})
-    # Limpieza de salas de juego
     for room in list(players.keys()):
         if sid in players[room]:
             del players[room][sid]
@@ -343,13 +332,13 @@ def on_disconnect():
             else:
                 socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
             break
-    # Limpieza de jugadores en línea
     if sid in online_players:
         del online_players[sid]
-        emit('online_players_update', list(online_players.values()))
+        socketio.emit('online_players_update', list(online_players.values()))
+    if sid in sessions:
+        del sessions[sid]
     print(f"Cliente desconectado: {sid}")
 
-# Evento para unir al usuario a su propia sala (opcional, para emitir eventos por username)
 @socketio.on('join_user_room')
 def on_join_user_room(data):
     username = data['username']
@@ -373,39 +362,36 @@ def on_join(data):
         return
 
     print(f"Jugador {sid} intentando unirse a {room}. Apostar: {enable_bet}, Monto: {bet}")
-    current_balance = load_wallet(username) if username else 0
+    current_balance = load_wallet(username)
     if enable_bet and current_balance < bet:
         emit('error', {'message': 'Fondos insuficientes para la apuesta'}, to=sid)
-        return  # No hace falta leave_room aquí porque aún no se unió
+        return
 
     join_room(room)
 
-    # Inicializa players[room] si no existe
     if room not in players:
         players[room] = {}
 
-    # Verifica si la sala está llena
     if len(players[room]) >= 2:
-        games[room]['is_public'] = is_public
-        games[room]['view_cost'] = view_cost
+        if room in games:
+            games[room]['is_public'] = is_public
+            games[room]['view_cost'] = view_cost
         emit('error', {'message': 'La sala está llena'}, to=sid)
         leave_room(room)
         return
 
-    # Asigna color al jugador y lo agrega a players[room]
     players[room][sid] = {
         'color': 'white' if len(players[room]) == 0 else 'black',
         'chosen_color': chosen_color,
         'bet': bet,
         'enable_bet': enable_bet,
-        'username': username  # Agregado para mantener consistencia
+        'username': username
     }
     emit('color_assigned', {'color': players[room][sid]['color'], 'chosenColor': chosen_color}, to=sid)
     print(f"Jugador {sid} asignado a {room} como {players[room][sid]['color']}")
 
-    # Inicializa games[room] si no existe
     if room not in games:
-        board, turn = reset_board(room)  # Usamos tu función reset_board
+        board, turn = reset_board(room)
         games[room] = {
             'board': board,
             'turn': turn,
@@ -417,7 +403,6 @@ def on_join(data):
             'bet': bet if enable_bet else 0
         }
 
-    # Si hay dos jugadores, inicia el juego
     if len(players[room]) == 2:
         player1_sid, player2_sid = list(players[room].keys())
         p1_bet = players[room][player1_sid]['bet']
@@ -452,8 +437,8 @@ def on_join(data):
         socketio.emit('game_start', {
             'board': games[room]['board'],
             'turn': games[room]['turn'],
-            'time_white': games[room]['time_white'] if time_per_player else None,
-            'time_black': games[room]['time_black'] if time_per_player else None,
+            'time_white': games[room]['time_white'],
+            'time_black': games[room]['time_black'],
             'playerColors': player_colors
         }, room=room)
         print(f"Juego iniciado en {room} con turno inicial: {games[room]['turn']}, apuesta: {bet_amount} ARS")
@@ -556,18 +541,16 @@ def on_resign(data):
 @socketio.on('join_waitlist')
 def on_join_waitlist(data):
     sid = request.sid
-    username = session.get('username')
+    username = sessions.get(sid)
     chosen_color = data.get('color', '#FFFFFF')
     avatar = data.get('avatar', '/static/default-avatar.png')
     print(f"Recibido join_waitlist: sid={sid}, username={username}, color={chosen_color}, avatar={avatar}")
     if username and sid not in available_players:
         available_players[sid] = {'username': username, 'chosen_color': chosen_color, 'avatar': avatar}
         print(f"{username} ({sid}) se unió a la lista de espera con avatar {avatar}")
-        # Emitir la actualización a todos los clientes
         players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
                         for s, info in available_players.items()]
-        print(f"Emitting waitlist_update con {len(players_list)} jugadores: {players_list}")
-        socketio.emit('waitlist_update', {'players': players_list})  # Eliminado broadcast=True
+        socketio.emit('waitlist_update', {'players': players_list})
     else:
         print(f"Fallo al unir a {sid} a la lista de espera: username={username}, ya en lista={sid in available_players}")
 
@@ -575,46 +558,37 @@ def on_join_waitlist(data):
 def on_select_opponent(data):
     opponent_sid = data.get('opponent_sid')
     player_sid = request.sid
-    username = session.get('username')
+    username = sessions.get(player_sid)
     
     print(f"Recibido select_opponent: player_sid={player_sid}, username={username}, opponent_sid={opponent_sid}")
     
     if not opponent_sid or opponent_sid not in available_players:
-        print(f"Error: opponent_sid {opponent_sid} no encontrado en available_players: {available_players}")
         emit('error', {'message': 'El oponente seleccionado no está disponible.'})
         return
     
     if player_sid not in available_players:
-        print(f"Error: player_sid {player_sid} no está en available_players")
         emit('error', {'message': 'No estás en la lista de espera.'})
         return
 
-    # Obtener datos de ambos jugadores
     player_data = available_players[player_sid]
     opponent_data = available_players[opponent_sid]
     
-    # Crear una sala única para el chat privado
     room = f"private_{player_sid}_{opponent_sid}"
     print(f"Creando sala privada: {room}")
     
-    # Asignar colores (por ejemplo, el que inicia es blanco)
     players[room] = {
         player_sid: {'color': 'white', 'chosen_color': player_data['chosen_color'], 'avatar': player_data['avatar'], 'bet': 0, 'enable_bet': False},
         opponent_sid: {'color': 'black', 'chosen_color': opponent_data['chosen_color'], 'avatar': opponent_data['avatar'], 'bet': 0, 'enable_bet': False}
     }
     
-    # Sacar a ambos de la lista de espera
     del available_players[player_sid]
     del available_players[opponent_sid]
     
-    # Notificar a ambos jugadores del inicio del chat privado
     emit('private_chat_start', {'room': room, 'opponent': opponent_data['username'], 'players': players[room]}, to=player_sid)
     emit('private_chat_start', {'room': room, 'opponent': username, 'players': players[room]}, to=opponent_sid)
     
-    # Actualizar la lista de espera para todos
     players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
                     for s, info in available_players.items()]
-    print(f"Emitting waitlist_update tras selección: {players_list}")
     socketio.emit('waitlist_update', {'players': players_list})
 
 @socketio.on('leave_waitlist')
@@ -626,10 +600,7 @@ def on_leave_waitlist():
         print(f"{username} ({sid}) salió de la lista de espera")
         players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
                         for s, info in available_players.items()]
-        print(f"Emitting waitlist_update tras salir: {players_list}")
         socketio.emit('waitlist_update', {'players': players_list})
-    else:
-        print(f"Intento de salir fallido: {sid} no encontrado en available_players")
 
 @socketio.on('leave_private_chat')
 def on_leave_private_chat(data):
@@ -651,13 +622,10 @@ def on_private_message(data):
     room = data['room']
     sid = request.sid
     message = data['message']
-    username = session.get('username')
-    print(f"Mensaje privado en {room} de {username}: {message}")
+    username = sessions.get(sid)
     if room in players and sid in players[room]:
-        color = players[room][sid]['chosen_color']  # Usar chosen_color
+        color = players[room][sid]['chosen_color']
         socketio.emit('private_message', {'username': username, 'color': color, 'message': message}, room=room)
-    else:
-        emit('error', {'message': 'No estás en esa sala'}, to=sid)
 
 @socketio.on('accept_conditions')
 def on_accept_conditions(data):
@@ -684,6 +652,13 @@ def on_accept_conditions(data):
                 emit('wallet_update', {'balance': load_wallet(sessions[opponent_sid])}, to=opponent_sid)
             emit('bet_accepted', {'bet': bet_amount}, room=room)
             board, turn = reset_board(room)
+            games[room] = {
+                'board': board,
+                'turn': turn,
+                'time_white': None,
+                'time_black': None,
+                'last_move_time': None
+            }
             player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
             socketio.emit('game_start', {
                 'board': board,
@@ -702,7 +677,6 @@ def on_chat_message(data):
     sid = request.sid
     message = data['message']
     color = players[room][sid]['color']
-    print(f"Mensaje en {room} de {sid} ({color}): {message}")
     socketio.emit('new_message', {'color': color, 'message': message}, room=room)
 
 @socketio.on('audio_message')
@@ -719,10 +693,8 @@ def on_video_signal(data):
     room = data['room']
     sid = request.sid
     signal = data['signal']
-    print(f"Señal WebRTC recibida de {sid} en {room}")
     for player_sid in players[room]:
         if player_sid != sid:
-            print(f"Enviando señal a {player_sid}")
             emit('video_signal', {'signal': signal}, to=player_sid)
 
 @socketio.on('play_with_bot')
@@ -731,21 +703,31 @@ def on_play_with_bot(data):
     room = f"bot_{sid}"
     players[room] = {sid: {'color': 'white', 'chosen_color': '#000000'}}
     board, turn = reset_board(room)
-    emit('game_start', {'board': board, 'turn': 'white', 'time_white': 600, 'time_black': 600, 'playerColors': {'white': '#000000', 'black': '#FF0000'}}, room=room)
-    print(f"Partida contra bot iniciada en {room} para {sid}")
-    # Bot juega como negro (responde después del primer movimiento del jugador)
+    games[room] = {
+        'board': board,
+        'turn': turn,
+        'time_white': 600,
+        'time_black': 600,
+        'last_move_time': time.time()
+    }
+    emit('game_start', {
+        'board': board,
+        'turn': 'white',
+        'time_white': 600,
+        'time_black': 600,
+        'playerColors': {'white': '#000000', 'black': '#FF0000'}
+    }, room=room)
 
-# Bot responde después de un movimiento del jugador
 @socketio.on('move')
 def on_move_with_bot(data):
     room = data['room']
     sid = request.sid
     if room.startswith('bot_') and room in games and sid in players[room]:
-        on_move(data)  # Procesa el movimiento del jugador
-        if room in games and games[room]['turn'] == 'black':  # Turno del bot
+        on_move(data)
+        if room in games and games[room]['turn'] == 'black':
             board = games[room]['board']
             chess_board = chess.Board(''.join(''.join(row) for row in board))
-            move = list(chess_board.legal_moves)[0]  # Elige el primer movimiento legal (simple bot)
+            move = list(chess_board.legal_moves)[0]
             chess_board.push(move)
             new_board = [['.' for _ in range(8)] for _ in range(8)]
             for square in chess.SQUARES:
@@ -755,7 +737,6 @@ def on_move_with_bot(data):
             games[room]['board'] = new_board
             games[room]['turn'] = 'white'
             socketio.emit('update_board', {'board': new_board, 'turn': 'white'}, room=room)
-            print(f"Bot movió en {room}: {move.uci()}")
 
 @socketio.on('global_message')
 def on_global_message(data):
@@ -763,8 +744,6 @@ def on_global_message(data):
     username = sessions.get(sid)
     if username:
         emit('global_message', {'username': username, 'message': data['message']}, broadcast=True)
-    else:
-        emit('error', {'message': 'Debes iniciar sesión para usar el chat global'}, to=sid)
 
 @socketio.on('video_stop')
 def on_video_stop(data):
@@ -780,99 +759,75 @@ def on_video_stop(data):
 def on_save_game(data):
     room = data['room']
     sid = request.sid
-    if room in players and sid in players[room]:
-        username = session.get('username')
-        if not username:
-            emit('error', {'message': 'No estás autenticado'}, to=sid)
-            return
-        game_name = data['game_name']
-        board_json = json.dumps(data['board'])
-        turn = data['turn']
-        try:
-            conn = sqlite3.connect(DATABASE_PATH)
-            c = conn.cursor()
-            c.execute('''INSERT INTO saved_games (username, room, game_name, board, turn)
-                         VALUES (?, ?, ?, ?, ?)''', (username, room, game_name, board_json, turn))
-            conn.commit()
-            conn.close()
-            socketio.emit('game_saved', {'message': f'Partida "{game_name}" guardada exitosamente'}, room=room)
-        except sqlite3.IntegrityError:
-            emit('error', {'message': f'Ya existe una partida guardada con el nombre "{game_name}"'}, to=sid)
-        except Exception as e:
-            emit('error', {'message': 'Error al guardar la partida'}, to=sid)
-            print(f"Error al guardar partida: {e}")
+    username = sessions.get(sid)
+    if not username:
+        emit('error', {'message': 'No estás autenticado'}, to=sid)
+        return
+    game_name = data['game_name']
+    board_json = json.dumps(data['board'])
+    turn = data['turn']
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('INSERT INTO saved_games (username, room, game_name, board, turn) VALUES (?, ?, ?, ?, ?)', 
+              (username, room, game_name, board_json, turn))
+    conn.commit()
+    conn.close()
+    socketio.emit('game_saved', {'message': f'Partida "{game_name}" guardada exitosamente'}, room=room)
 
 @socketio.on('get_saved_games')
 def on_get_saved_games(data):
     username = data['username']
     sid = request.sid
-    try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        c = conn.cursor()
-        c.execute('SELECT game_name, room FROM saved_games WHERE username = ?', (username,))
-        games_list = [{'game_name': row[0], 'room': row[1]} for row in c.fetchall()]
-        conn.close()
-        socketio.emit('saved_games_list', {'games': games_list}, to=sid)
-    except Exception as e:
-        emit('error', {'message': 'Error al obtener las partidas guardadas'}, to=sid)
-        print(f"Error al obtener partidas: {e}")
-
-# Evento para obtener el saldo actual
-@socketio.on('get_wallet_balance')
-def on_get_wallet_balance(data):
-    username = data['username']
-    balance = load_wallet(username)
-    emit('wallet_balance', {'balance': balance}, to=request.sid)
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('SELECT game_name, room FROM saved_games WHERE username = ?', (username,))
+    games_list = [{'game_name': row[0], 'room': row[1]} for row in c.fetchall()]
+    conn.close()
+    socketio.emit('saved_games_list', {'games': games_list}, to=sid)
 
 @socketio.on('load_game')
 def on_load_game(data):
     username = data['username']
     game_name = data['game_name']
     sid = request.sid
-    try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        c = conn.cursor()
-        c.execute('SELECT board, turn, room FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
-        result = c.fetchone()
-        conn.close()
-        if result:
-            board = json.loads(result[0])
-            turn = result[1]
-            room = result[2]
-            join_room(room)
-            if room not in players:
-                players[room] = {}
-            if len(players[room]) >= 2:
-                emit('error', {'message': 'La sala está llena'}, to=sid)
-                leave_room(room)
-                return
-            color = 'white' if len(players[room]) == 0 else 'black'
-            players[room][sid] = {'color': color, 'chosen_color': '#FFFFFF', 'bet': 0, 'enable_bet': False}
-            emit('color_assigned', {'color': color, 'chosenColor': '#FFFFFF'}, to=sid)
-            games[room] = {'board': board, 'turn': turn, 'time_white': None, 'time_black': None, 'last_move_time': None}
-            emit('game_loaded', {'board': board, 'turn': turn, 'game_name': game_name, 'room': room}, to=sid)
-            if len(players[room]) == 2:
-                player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
-                socketio.emit('game_start', {
-                    'board': board,
-                    'turn': turn,
-                    'time_white': None,
-                    'time_black': None,
-                    'playerColors': player_colors
-                }, room=room)
-        else:
-            emit('error', {'message': 'Partida no encontrada'}, to=sid)
-    except Exception as e:
-        emit('error', {'message': 'Error al cargar la partida'}, to=sid)
-        print(f"Error al cargar partida: {e}")
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('SELECT board, turn, room FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
+    result = c.fetchone()
+    conn.close()
+    if result:
+        board = json.loads(result[0])
+        turn = result[1]
+        room = result[2]
+        join_room(room)
+        if room not in players:
+            players[room] = {}
+        if len(players[room]) >= 2:
+            emit('error', {'message': 'La sala está llena'}, to=sid)
+            leave_room(room)
+            return
+        color = 'white' if len(players[room]) == 0 else 'black'
+        players[room][sid] = {'color': color, 'chosen_color': '#FFFFFF', 'bet': 0, 'enable_bet': False}
+        emit('color_assigned', {'color': color, 'chosenColor': '#FFFFFF'}, to=sid)
+        games[room] = {'board': board, 'turn': turn, 'time_white': None, 'time_black': None, 'last_move_time': None}
+        emit('game_loaded', {'board': board, 'turn': turn, 'game_name': game_name, 'room': room}, to=sid)
+        if len(players[room]) == 2:
+            player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
+            socketio.emit('game_start', {
+                'board': board,
+                'turn': turn,
+                'time_white': None,
+                'time_black': None,
+                'playerColors': player_colors
+            }, room=room)
 
 # Eventos Socket.IO - Billetera
 @socketio.on('deposit_request')
 def on_deposit_request(data):
     sid = request.sid
     amount = data['amount']
-    username = data.get('username')
-    if not username or username != sessions.get(sid):
+    username = sessions.get(sid)
+    if not username:
         emit('error', {'message': 'Debes iniciar sesión primero'}, to=sid)
         return
     preference = {
@@ -886,39 +841,23 @@ def on_deposit_request(data):
         },
         "auto_return": "approved"
     }
-    try:
-        preference_result = sdk.preference().create(preference)
-        if 'response' in preference_result and 'id' in preference_result['response']:
-            preference_id = preference_result['response']['id']
-            emit('deposit_url', {'preference_id': preference_id}, to=sid)
-        else:
-            emit('error', {'message': 'Respuesta inválida de MercadoPago'}, to=sid)
-    except Exception as e:
-        print(f"Excepción al crear preferencia: {str(e)}")
-        emit('error', {'message': 'Error al procesar la recarga'}, to=sid)
+    preference_result = sdk.preference().create(preference)
+    emit('deposit_url', {'preference_id': preference_result['response']['id']}, to=sid)
 
 @socketio.on('check_deposit')
 def on_check_deposit(data):
     sid = request.sid
-    username = data.get('username')
-    print(f"Verificando depósito para {username}, SID: {sid}")
-    if not username or username != sessions.get(sid):
-        print(f"Sesión inválida para SID: {sid}")
+    username = sessions.get(sid)
+    if not username:
         emit('error', {'message': 'Sesión inválida'}, to=sid)
         return
     payment = sdk.payment().search({'external_reference': username, 'status': 'approved'})
-    print(f"Respuesta completa de MercadoPago: {payment}")
     if payment['results']:
-        print(f"Pago encontrado: {payment['results'][0]}")
         amount = payment['results'][0]['transaction_amount']
         current_balance = load_wallet(username)
         new_balance = current_balance + amount
         save_wallet(username, new_balance)
         emit('wallet_update', {'balance': new_balance}, to=sid)
-        print(f"Depósito de {amount} ARS aprobado para {username}. Nuevo saldo: {new_balance}")
-    else:
-        print(f"No se encontraron pagos aprobados para {username}")
-        emit('error', {'message': 'No se detectó el pago aprobado'}, to=sid)
 
 @socketio.on('withdraw_request')
 def on_withdraw_request(data):
@@ -930,54 +869,10 @@ def on_withdraw_request(data):
         save_wallet(username, current_balance - amount)
         emit('withdraw_success', {'amount': amount}, to=sid)
         emit('wallet_update', {'balance': load_wallet(username)}, to=sid)
-    else:
-        emit('error', {'message': 'Fondos insuficientes'}, to=sid)
 
 # Inicio del Servidor
 if __name__ == '__main__':
-    print("Limpiando players y games al inicio...")
     players.clear()
     games.clear()
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    
-    # Crear tabla users si no existe
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        username TEXT UNIQUE,
-        password TEXT,
-        avatar TEXT DEFAULT '/static/default-avatar.png'
-    )''')
-    
-    # Crear tabla saved_games si no existe
-    c.execute('''CREATE TABLE IF NOT EXISTS saved_games (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        room TEXT,
-        game_name TEXT,
-        board TEXT,
-        turn TEXT,
-        UNIQUE(username, game_name)
-    )''')
-    
-    # Crear tabla wallets si no existe
-    c.execute('''CREATE TABLE IF NOT EXISTS wallets (
-        username TEXT PRIMARY KEY,
-        balance REAL DEFAULT 0
-    )''')
-    
-    # Verificar si la columna avatar ya existe antes de intentar agregarla
-    c.execute("PRAGMA table_info(users)")
-    columns = [col[1] for col in c.fetchall()]  # Lista de nombres de columnas
-    if 'avatar' not in columns:
-        c.execute("ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT '/static/default-avatar.png'")
-        print("Columna 'avatar' añadida a la tabla 'users'.")
-    else:
-        print("La columna 'avatar' ya existe en la tabla 'users'.")
-    
-    conn.commit()
-    conn.close()
-    
-    # Usar puerto dinámico para Render, con debug solo en local
-    port = int(os.getenv("PORT", 5000))
-    debug = os.getenv('RENDER') is None  # Debug solo en local, no en Render
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+    port = int(os.getenv("PORT", 10000))  # Cambiado a 10000 para coincidir con Render
+    socketio.run(app, host='0.0.0.0', port=port, debug=not os.getenv('RENDER'))

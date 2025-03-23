@@ -597,9 +597,9 @@
             <button id="resign-button" onclick="resignGame()">Abandonar partida</button>
         </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.js"></script>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
-<script src="https://unpkg.com/simple-peer@9.11.0/simplepeer.min.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.0/simplepeer.min.js"></script>
     <script src="/static/game.js"></script>
     <script>
         function previewAvatar(event) {
@@ -608,18 +608,14 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     document.getElementById('avatar-preview').src = e.target.result;
-                    currentAvatar = e.target.result; // Guardar el avatar en base64
+                    currentAvatar = e.target.result;
                 };
                 reader.readAsDataURL(file);
             }
         }
-<label><input type="checkbox" id="public-game" checked> Partida Pública</label>
-    <input type="number" id="view-cost" placeholder="Costo para ver ($ARS)" min="0" step="50" disabled>
-</div>
-<script>
-    document.getElementById('public-game').addEventListener('change', (e) => {
-        document.getElementById('view-cost').disabled = e.target.checked;
-    });
-</script>
+        document.getElementById('public-game').addEventListener('change', (e) => {
+            document.getElementById('view-cost').disabled = e.target.checked;
+        });
+    </script>
 </body>
 </html>

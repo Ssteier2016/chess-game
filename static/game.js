@@ -18,15 +18,14 @@ let walletBalance = 0;
 let username = null;
 let currentAvatar = null;
 
-// Conexión dinámica: localhost para pruebas, Render para producción
-const socket = io(location.hostname === 'localhost' ? 'http://localhost:5000' : 'https://peonkingame.onrender.com');
+const socket = io(location.hostname === 'localhost' ? 'http://localhost:10000' : 'https://peonkingame.onrender.com');
 const chessboard = document.getElementById('chessboard');
 const roomSelection = document.getElementById('room-selection');
 const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
-const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' }); // Clave pública de test
+const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' });
 
 // Funciones de Interfaz y Juego
 function joinRoom() {
@@ -53,7 +52,6 @@ function joinRoom() {
 
 function playWithBot() {
     socket.emit('play_with_bot', {});
-    console.log('Iniciando partida contra bot');
 }
 
 function watchGame(room) {
@@ -70,7 +68,7 @@ function renderOnlinePlayers(players) {
         img.style.width = '20px';
         img.style.height = '20px';
         img.style.marginRight = '5px';
-        img.onerror = () => img.src = '/static/default-avatar.png'; // Fallback si falla el avatar
+        img.onerror = () => img.src = '/static/default-avatar.png';
         p.appendChild(img);
         p.appendChild(document.createTextNode(player.username));
         onlineDiv.appendChild(p);
@@ -93,11 +91,10 @@ function joinWaitlist() {
         return;
     }
     const color = document.getElementById('color-select').value;
-    socket.emit('join_waitlist', { color, avatar: currentAvatar || '/static/default-avatar.png' });
+    socket.emit('join_waitlist', { color, avatar: currentAvatar });
     document.getElementById('room-selection').style.display = 'none';
     document.getElementById('waitlist').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
-    console.log('Emitiendo join_waitlist para', username, 'con color:', color, 'y avatar:', currentAvatar);
 }
 
 function goBackFromWaitlist() {
@@ -105,12 +102,6 @@ function goBackFromWaitlist() {
     document.getElementById('waitlist').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
-    document.getElementById('chessboard').style.display = 'none';
-    document.getElementById('chat').style.display = 'none';
-    document.getElementById('game-buttons').style.display = 'none';
-    document.getElementById('timers').style.display = 'none';
-    document.getElementById('saved-games').style.display = 'none';
-    console.log('Volviendo atrás desde la lista de espera');
 }
 
 function goBackFromPrivateChat() {
@@ -118,13 +109,7 @@ function goBackFromPrivateChat() {
     document.getElementById('private-chat').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
-    document.getElementById('chessboard').style.display = 'none';
-    document.getElementById('chat').style.display = 'none';
-    document.getElementById('game-buttons').style.display = 'none';
-    document.getElementById('timers').style.display = 'none';
-    document.getElementById('saved-games').style.display = 'none';
     room = null;
-    console.log('Volviendo atrás desde el chat privado');
 }
 
 function renderBoard() {
@@ -146,7 +131,6 @@ function renderBoard() {
             chessboard.appendChild(square);
         }
     }
-    console.log('Tablero renderizado:', board);
 }
 
 function handleSquareClick(event) {
@@ -169,15 +153,11 @@ function handleSquareClick(event) {
         if (board[row][col] !== '.' && ((myColor === 'white' && isWhite(board[row][col])) || (myColor === 'black' && !isWhite(board[row][col])))) {
             selectedSquare = { row, col };
             event.target.style.backgroundColor = '#d4af37';
-            console.log(`Pieza seleccionada: ${board[row][col]} en ${row},${col}`);
-        } else {
-            console.log(`No podés mover esa pieza. Pieza: ${board[row][col]}, Tu color: ${myColor}`);
         }
     } else {
         const startRow = selectedSquare.row;
         const startCol = selectedSquare.col;
         socket.emit('move', { room, start_row: startRow, start_col: startCol, end_row: row, end_col: col });
-        console.log(`Movimiento enviado: ${startRow},${startCol} a ${row},${col}`);
         document.querySelector(`.square[data-row="${startRow}"][data-col="${startCol}"]`).style.backgroundColor = '';
         selectedSquare = null;
     }
@@ -196,7 +176,6 @@ function formatTime(seconds) {
 }
 
 function updateTimers() {
-    console.log(`Actualizando temporizadores: Blancas=${timeWhite}, Negras=${timeBlack}`);
     document.getElementById('white-timer').textContent = `Blancas: ${formatTime(timeWhite)}`;
     document.getElementById('black-timer').textContent = `Negras: ${formatTime(timeBlack)}`;
 }
@@ -249,10 +228,7 @@ function sendMessage() {
     const message = input.value.trim();
     if (message && room) {
         socket.emit('chat_message', { room, message });
-        console.log(`Mensaje enviado a ${room}: ${message}`);
         input.value = '';
-    } else {
-        console.log('Error: No se puede enviar mensaje. Room o mensaje vacíos:', { room, message });
     }
 }
 
@@ -270,11 +246,6 @@ function startRecording() {
             mediaRecorder.start();
             document.getElementById('record-audio').style.display = 'none';
             document.getElementById('stop-audio').style.display = 'inline';
-            console.log('Grabación iniciada');
-        })
-        .catch(err => {
-            console.error('Error al acceder al micrófono:', err);
-            alert('No se pudo acceder al micrófono. Asegurate de dar permisos.');
         });
 }
 
@@ -283,7 +254,6 @@ function stopRecording() {
         mediaRecorder.stop();
         document.getElementById('record-audio').style.display = 'inline';
         document.getElementById('stop-audio').style.display = 'none';
-        console.log('Grabación detenida');
     }
 }
 
@@ -293,11 +263,8 @@ function sendAudioMessage(audioBlob) {
         reader.onload = () => {
             const audioData = reader.result.split(',')[1];
             socket.emit('audio_message', { room, audio: audioData });
-            console.log('Mensaje de audio enviado a', room);
         };
         reader.readAsDataURL(audioBlob);
-    } else {
-        console.log('Error: No se puede enviar audio, no hay sala activa');
     }
 }
 
@@ -310,20 +277,11 @@ function startVideoCall() {
             document.getElementById('start-video').style.display = 'none';
             document.getElementById('stop-video').style.display = 'inline';
             peer = new SimplePeer({ initiator: !room.includes('bot'), stream });
-            peer.on('signal', data => {
-                console.log('Enviando señal WebRTC:', data);
-                socket.emit('video_signal', { room, signal: data });
-            });
+            peer.on('signal', data => socket.emit('video_signal', { room, signal: data }));
             peer.on('stream', remoteStream => {
-                console.log('Recibiendo stream remoto');
                 document.getElementById('remote-video').srcObject = remoteStream;
                 document.getElementById('remote-video').style.display = 'block';
             });
-            peer.on('error', err => console.error('Error en SimplePeer:', err));
-        })
-        .catch(err => {
-            console.error('Error al iniciar videollamada:', err);
-            alert('No se pudo iniciar la videollamada. Asegurate de dar permisos.');
         });
 }
 
@@ -342,7 +300,6 @@ function stopVideoCall() {
         peer = null;
     }
     socket.emit('video_stop', { room });
-    console.log('Videollamada detenida');
 }
 
 // Funciones de Billetera
@@ -350,7 +307,6 @@ function depositMoney() {
     const amount = parseInt(document.getElementById('deposit-amount').value);
     if (amount >= 100) {
         socket.emit('deposit_request', { amount, username });
-        console.log(`Solicitud de depósito enviada: $${amount} ARS para ${username}`);
     } else {
         alert('El monto mínimo para recargar es $100 ARS.');
     }
@@ -360,22 +316,14 @@ function withdrawMoney() {
     const amount = parseInt(document.getElementById('withdraw-amount').value) || walletBalance;
     if (amount > 0 && amount <= walletBalance) {
         socket.emit('withdraw_request', { amount });
-        console.log(`Solicitud de retiro enviada: $${amount} ARS`);
     } else {
         alert('Cantidad inválida o fondos insuficientes.');
-        console.log(`Error: Retiro inválido. Monto: ${amount}, Saldo: ${walletBalance}`);
     }
 }
 
 function updateWalletBalance(balance) {
     walletBalance = balance;
-    const walletElement = document.getElementById('wallet-balance');
-    if (walletElement) {
-        walletElement.textContent = `Saldo: $${balance} ARS`;
-        console.log('Saldo actualizado:', balance);
-    } else {
-        console.error('Elemento #wallet-balance no encontrado');
-    }
+    document.getElementById('wallet-balance').textContent = `Saldo: $${balance} ARS`;
 }
 
 // Funciones de Guardado y Abandono
@@ -384,14 +332,12 @@ function saveGame() {
     const gameName = prompt('Ingresá un nombre para la partida:');
     if (gameName && room) {
         socket.emit('save_game', { room, game_name: gameName, board, turn });
-        console.log(`Solicitud de guardado enviada para "${gameName}" en ${room}`);
     }
 }
 
 function resignGame() {
     if (room) {
         socket.emit('resign', { room });
-        console.log(`Abandonando partida en ${room}`);
     }
 }
 
@@ -399,19 +345,16 @@ function loadSavedGames() {
     if (!username) return alert('Debes iniciar sesión para cargar una partida');
     socket.emit('get_saved_games', { username });
     savedGamesDiv.style.display = 'block';
-    console.log('Solicitando lista de partidas guardadas para', username);
 }
 
 function loadGame(gameName) {
     if (!username) return alert('Debes iniciar sesión para cargar una partida');
     socket.emit('load_game', { username, game_name: gameName });
-    console.log(`Cargando partida "${gameName}" para ${username}`);
 }
 
 // Funciones de Chat Privado
 function selectOpponent(opponentSid) {
     socket.emit('select_opponent', { opponent_sid: opponentSid });
-    console.log('Seleccionando oponente:', opponentSid);
 }
 
 function sendPrivateMessage() {
@@ -419,10 +362,7 @@ function sendPrivateMessage() {
     const message = input.value.trim();
     if (message && room) {
         socket.emit('private_message', { room, message });
-        console.log(`Mensaje privado enviado a ${room}: ${message}`);
         input.value = '';
-    } else {
-        console.log('Error: No se puede enviar mensaje privado. Room o mensaje vacíos:', { room, message });
     }
 }
 
@@ -434,15 +374,11 @@ function acceptConditions() {
         return;
     }
     socket.emit('accept_conditions', { room, bet: betAmount, enableBet });
-    console.log(`Enviando aceptación de condiciones: bet=${betAmount}, enableBet=${enableBet}`);
 }
 
 // Funciones de Autenticación
-function login() {
-    const usernameInput = document.getElementById('login-username').value;
-    const password = document.getElementById('login-password').value;
+function login(usernameInput, password) {  // Acepta parámetros para evitar problemas con el form
     socket.emit('login', { username: usernameInput, password });
-    console.log('Intentando login para', usernameInput);
 }
 
 function register() {
@@ -451,19 +387,17 @@ function register() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                username = formData.get('username');
+                username = data.username;
+                currentAvatar = data.avatar;
                 document.getElementById('login-register').style.display = 'none';
                 document.querySelector('.container').style.display = 'flex';
                 document.getElementById('room-selection').style.display = 'block';
-                fetch(`/get_avatar?username=${username}`).then(res => res.json()).then(data => {
-                    currentAvatar = data.avatar;
-                    console.log('Avatar cargado tras registro:', currentAvatar);
-                });
+                socket.emit('join_user_room', { username });
+                socket.emit('get_wallet_balance', { username });
             } else {
                 document.getElementById('register-error').textContent = data.error;
             }
-        })
-        .catch(err => console.error('Error en registro:', err));
+        });
 }
 
 // Eventos Socket.IO
@@ -472,7 +406,6 @@ socket.on('connect', () => {
         socket.emit('join_user_room', { username });
         socket.emit('get_wallet_balance', { username });
     }
-    console.log('Conectado al servidor');
 });
 
 socket.on('online_players_update', players => {
@@ -492,7 +425,6 @@ socket.on('deposit_url', data => {
         preference: { id: data.preference_id },
         autoOpen: true,
         onClose: () => {
-            console.log(`Checkout cerrado, verificando depósito para ${username}`);
             socket.emit('check_deposit', { username });
             setTimeout(() => socket.emit('check_deposit', { username }), 5000);
         }
@@ -507,7 +439,6 @@ socket.on('withdraw_success', data => {
 socket.on('color_assigned', data => {
     myColor = data.color;
     playerColors[data.color] = data.chosenColor;
-    console.log(`Color asignado: ${data.color}, Color elegido: ${data.chosenColor}`);
 });
 
 socket.on('game_start', data => {
@@ -517,7 +448,6 @@ socket.on('game_start', data => {
     timeBlack = data.time_black;
     playerColors = data.playerColors || data.players;
     previousBoard = JSON.parse(JSON.stringify(board));
-    console.log('Juego iniciado con:', { board, turn, timeWhite, timeBlack, playerColors, myColor });
     roomSelection.style.display = 'none';
     chessboard.style.display = 'grid';
     chat.style.display = 'block';
@@ -550,7 +480,6 @@ socket.on('new_message', data => {
     message.textContent = `${data.color}: ${data.message}`;
     messages.appendChild(message);
     messages.scrollTop = messages.scrollHeight;
-    console.log('Mensaje recibido:', data);
 });
 
 socket.on('audio_message', data => {
@@ -563,7 +492,6 @@ socket.on('audio_message', data => {
     messageDiv.appendChild(audio);
     messages.appendChild(messageDiv);
     messages.scrollTop = messages.scrollHeight;
-    console.log('Mensaje de audio recibido en', room);
 });
 
 socket.on('video_signal', data => {
@@ -624,7 +552,6 @@ socket.on('saved_games_list', data => {
         button.onclick = () => loadGame(game.game_name);
         savedGamesDiv.appendChild(button);
     });
-    console.log('Lista de partidas guardadas recibida:', data.games);
 });
 
 socket.on('game_loaded', data => {
@@ -690,20 +617,19 @@ socket.on('private_chat_start', data => {
 socket.on('private_message', data => {
     const messages = document.getElementById('private-chat-messages');
     const message = document.createElement('div');
-    message.textContent = `${data.color}: ${data.message}`;
+    message.textContent = `${data.username}: ${data.message}`;
     messages.appendChild(message);
     messages.scrollTop = messages.scrollHeight;
 });
 
 socket.on('login_success', data => {
     username = data.username;
+    currentAvatar = data.avatar;
     document.getElementById('login-register').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
-    fetch(`/get_avatar?username=${username}`).then(res => res.json()).then(data => {
-        currentAvatar = data.avatar;
-        console.log('Avatar cargado:', currentAvatar);
-    });
+    socket.emit('join_user_room', { username });
+    socket.emit('get_wallet_balance', { username });
 });
 
 socket.on('login_error', data => {
