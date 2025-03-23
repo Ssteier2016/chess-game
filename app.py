@@ -13,13 +13,14 @@ import chess
 
 # Configuración Inicial
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_HEY", "Ma730yIan")  # Cambia esto por una clave secreta fuerte
+app.secret_key = os.getenv("Ma730yIan")  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
 sdk = mercadopago.SDK("APP_USR-5091391065626033-031704-d3f30ae7f58f6a82763a55123c451a14-2326694132") # Access Token
 
 # Variables Globales
+sessions = {}  # Almacena sid -> username
 players = {}  # {room: {sid: {'color': str, 'chosen_color': str, 'bet': int, 'enable_bet': bool}}}
 games = {}  # {room: {'board': list, 'turn': str, 'time_white': float, 'time_black': float, 'last_move_time': float}}
 wallets = {}  # {sid: float}
@@ -150,6 +151,19 @@ def is_checkmate(board, color):
                                 return False
     return True
 
+def load_wallets():
+    try:
+        with open('wallets.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def save_wallets(wallets):
+    with open('wallets.json', 'w') as f:
+        json.dump(wallets, f)
+
+wallets = load_wallets()
+
 def update_timer(room):
     if room in games and games[room]['time_white'] is not None:
         current_time = time.time()
@@ -232,6 +246,12 @@ def index():
 @app.route('/login', methods=['POST'])
 def login():
     username = request.form.get('username')
+    if username:
+        sid = request.sid if hasattr(request, 'sid') else None  # Solo para SocketIO, ajustar si usas Flask puro
+        if sid:
+            sessions[sid] = username
+        return {'success': True}
+        return {'success': False, 'error': 'Username requerido'}
     password = request.form.get('password')
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
@@ -317,7 +337,13 @@ def on_disconnect():
         del online_players[sid]
         emit('online_players_update', list(online_players.values()), broadcast=True)
     print(f"Cliente desconectado: {sid}")
-
+    
+# Evento para unir al usuario a su propia sala (opcional, para emitir eventos por username)
+@socketio.on('join_user_room')
+def on_join_user_room(data):
+    username = data['username']
+    join_room(username)
+    
 # Eventos Socket.IO - Juego
 @socketio.on('join')
 def on_join(data):
@@ -714,6 +740,13 @@ def on_get_saved_games(data):
         emit('error', {'message': 'Error al obtener las partidas guardadas'}, to=sid)
         print(f"Error al obtener partidas: {e}")
 
+# Evento para obtener el saldo actual
+@socketio.on('get_wallet_balance')
+def on_get_wallet_balance(data):
+    username = data['username']
+    balance = wallets.get(username, 0)
+    emit('wallet_balance', {'balance': balance}, to=request.sid)
+    
 @socketio.on('load_game')
 def on_load_game(data):
     username = data['username']
@@ -761,10 +794,14 @@ def on_load_game(data):
 def on_deposit_request(data):
     sid = request.sid
     amount = data['amount']
+    username = sessions.get(sid)  # Obtener username de la sesión
+    if not username:
+        emit('error', {'message': 'Debes iniciar sesión primero'}, to=sid)
+        return
     preference = {
     "items": [{"title": "Recarga PeonKing", "quantity": 1, "currency_id": "ARS", "unit_price": float(amount)}],
-    "payer": {"email": "test_user@example.com"},
-    "external_reference": sid,
+    "payer": {"email": "rodrigo.n.arena@hotmail.com"},
+    "external_reference": username,
     "back_urls": {
         "success": "https://peonkingame.onrender.com/success",
         "failure": "https://peonkingame.onrender.com/failure",
@@ -786,11 +823,19 @@ def on_deposit_request(data):
 @socketio.on('check_deposit')
 def on_check_deposit(data):
     sid = request.sid
-    payment = sdk.payment().search({'external_reference': sid, 'status': 'approved'})
+    username = sessions.get(sid)  # Obtener username de la sesión
+    if not username:
+        emit('error', {'message': 'Sesión inválida'}, to=sid)
+        return
+    payment = sdk.payment().search({'external_reference': username, 'status': 'approved'})    
     if payment['results']:
         amount = payment['results'][0]['transaction_amount']
-        wallets[sid] = wallets.get(sid, 0) + amount
-        emit('wallet_update', {'balance': wallets[sid]}, to=sid)
+        wallets[username] = wallets.get(sid, 0) + amount
+        save_wallets(wallets)  # Guardar después de actualizar
+        emit('wallet_update', {'balance': wallets[username]}, to=sid)
+        print(f"Depósito de {amount} ARS aprobado para {username}. Nuevo saldo: {wallets[username]}")
+    else:
+        print(f"No se encontraron pagos aprobados para {username}")
 
 @socketio.on('withdraw_request')
 def on_withdraw_request(data):

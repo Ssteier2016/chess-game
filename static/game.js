@@ -411,7 +411,12 @@ function acceptConditions() {
 }
 
 // Eventos Socket.IO
-socket.on('connect', () => console.log('Conectado al servidor'));
+socket.on('connect', () => {
+    if (username) {
+        socket.emit('join_user_room', { username: username });
+        socket.emit('get_wallet_balance', { username: username });
+    }
+});
 
 socket.on('online_players_update', (players) => {
     renderOnlinePlayers(players);
@@ -597,6 +602,22 @@ socket.on('game_loaded', (data) => {
 });
 
 socket.on('wallet_update', (data) => updateWalletBalance(data.balance));
+
+socket.on('wallet_update', (data) => {
+    console.log('Evento wallet_update recibido:', data);
+    updateWalletBalance(data.balance);
+});
+
+function updateWalletBalance(balance) {
+    walletBalance = balance;
+    const walletElement = document.getElementById('wallet-balance');
+    if (walletElement) {
+        walletElement.textContent = `Saldo: $${balance} ARS`;
+        console.log('Saldo actualizado:', balance);
+    } else {
+        console.error('Elemento #wallet-balance no encontrado');
+    }
+}
 
 socket.on('bet_accepted', (data) => {
     alert(data.bet > 0 ? `Apuesta de $${data.bet} ARS aceptada por ambos jugadores en la sala ${room}.` : `Partida sin apuesta iniciada en la sala ${room}.`);
