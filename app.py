@@ -16,7 +16,9 @@ import chess.engine
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
-engine = chess.engine.SimpleEngine.popen_uci("/ruta/a/stockfish")
+# Ajusta la ruta a Stockfish según tu entorno (local o Render)
+stockfish_path = "/opt/render/project/src/stockfish" if os.getenv('RENDER') else "./stockfish"
+engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
 sdk = mercadopago.SDK("TEST-7030946997237677-031704-0d76aa7f3f9dc1968b5eb9a39b79b306-320701222")  # Access Token
 
@@ -481,7 +483,7 @@ def handle_play_against_bot(data):
     
     if board.is_game_over():
         emit('game_over', {'result': board.result()}, room=sid)
- engine.quit()  # Cierra el motor al finalizar el programa       
+
 @socketio.on('move')
 def on_move(data):
     room = data['room']
@@ -713,28 +715,12 @@ def on_video_signal(data):
         if player_sid != sid:
             emit('video_signal', {'signal': signal}, to=player_sid)
 
-@socketio.on('play_with_bot')
+# Eliminamos play_with_bot y usamos solo play_against_bot para consistencia con el frontend
+@socketio.on('play_with_bot')  # Redirigimos este evento al correcto
 def on_play_with_bot(data):
-    sid = request.sid
-    room = f"bot_{sid}"
-    players[room] = {sid: {'color': 'white', 'chosen_color': '#000000'}}
-    board, turn = reset_board(room)
-    games[room] = {
-        'board': board,
-        'turn': turn,
-        'time_white': 600,
-        'time_black': 600,
-        'last_move_time': time.time()
-    }
-    emit('game_start', {
-        'board': board,
-        'turn': 'white',
-        'time_white': 600,
-        'time_black': 600,
-        'playerColors': {'white': '#000000', 'black': '#FF0000'}
-    }, room=room)
+    handle_play_against_bot(data)
 
-@socketio.on('move')
+@socketio.on('move_with_bot')  # No necesario con el frontend actual, pero lo dejamos por si lo usás
 def on_move_with_bot(data):
     room = data['room']
     sid = request.sid
