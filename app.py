@@ -3,7 +3,6 @@ import eventlet
 eventlet.monkey_patch()  # Aplicar monkey patch primero
 from flask import Flask, render_template, jsonify, request, session
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from stockfish import Stockfish
 import mercadopago
 import sqlite3
 import bcrypt
@@ -20,7 +19,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Ajusta la ruta a Stockfish según tu entorno (local o Render)
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
 sdk = mercadopago.SDK("TEST-7030946997237677-031704-0d76aa7f3f9dc1968b5eb9a39b79b306-320701222")  # Access Token
-engine = Stockfish()  # Usa el paquete stockfish de Python
+stockfish_path = "/opt/render/project/src/stockfish" if os.getenv('RENDER') else "./stockfish"
+engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 # Variables Globales
 sessions = {}  # Almacena sid -> username
 players = {}  # {room: {sid: {'color': str, 'chosen_color': str, 'bet': int, 'enable_bet': bool}}}
