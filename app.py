@@ -10,12 +10,13 @@ import json
 import time
 import colorsys
 import chess
+import chess.engine
 
 # Configuración Inicial
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')  # Cambia esto por una clave secreta fuerte
 socketio = SocketIO(app, cors_allowed_origins="*")
-
+engine = chess.engine.SimpleEngine.popen_uci("/ruta/a/stockfish")
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
 sdk = mercadopago.SDK("TEST-7030946997237677-031704-0d76aa7f3f9dc1968b5eb9a39b79b306-320701222")  # Access Token
 
@@ -466,6 +467,21 @@ def on_watch_game(data):
         else:
             emit('error', {'message': 'Fondos insuficientes para ver la partida'}, to=sid)
 
+@socketio.on('play_against_bot')
+def handle_play_against_bot(data):
+    sid = request.sid
+    fen = data.get('fen', chess.STARTING_FEN)  # Posición inicial por defecto
+    board = chess.Board(fen)
+    
+    if not board.is_game_over():
+        result = engine.play(board, chess.engine.Limit(time=0.1))  # 0.1 segundos de思考
+        move = result.move
+        board.push(move)
+        emit('bot_move', {'move': move.uci(), 'fen': board.fen()}, room=sid)
+    
+    if board.is_game_over():
+        emit('game_over', {'result': board.result()}, room=sid)
+ engine.quit()  # Cierra el motor al finalizar el programa       
 @socketio.on('move')
 def on_move(data):
     room = data['room']
