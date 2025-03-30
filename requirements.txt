@@ -7,3 +7,5 @@ requests==2.28.1
 mercadopago==2.2.3
 gunicorn
 python-chess
+stockfish
+sqlite3
