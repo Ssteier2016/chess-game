@@ -1,14 +1,15 @@
 #!/bin/bash
-# Intenta instalar Stockfish desde los repositorios de Ubuntu
+# Instala las herramientas necesarias para compilar
 apt-get update
-apt-get install -y stockfish || echo "No se pudo instalar Stockfish con apt-get, intentando descarga manual"
-# Verifica si se instaló correctamente
-if [ -f /usr/games/stockfish ]; then
-    cp /usr/games/stockfish /opt/render/project/src/stockfish
-else
-    # Si falla, descarga manualmente desde GitHub
-    curl -Lo /opt/render/project/src/stockfish https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64
-    chmod +x /opt/render/project/src/stockfish
-fi
-# Verifica la instalación
+apt-get install -y git make g++
+# Clona el repositorio de Stockfish
+git clone https://github.com/official-stockfish/Stockfish.git /tmp/stockfish-src
+cd /tmp/stockfish-src/src
+# Compila Stockfish
+make -j build ARCH=x86-64
+# Copia el binario compilado a la ruta esperada
+cp stockfish /opt/render/project/src/stockfish
+# Verifica
 /opt/render/project/src/stockfish --version || echo "Error al ejecutar Stockfish"
+# Limpia los archivos temporales
+rm -rf /tmp/stockfish-src
