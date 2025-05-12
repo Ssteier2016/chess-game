@@ -118,6 +118,17 @@
             margin-left: 5px;
             vertical-align: middle;
         }
+        .user-stats button {
+            margin-top: 5px;
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Junicode', sans-serif;
+            font-size: 14px;
+        }
         .game-area {
             display: flex;
             flex-direction: row;
@@ -414,6 +425,10 @@
                 width: 16px;
                 height: 16px;
             }
+            .user-stats button {
+                font-size: 12px;
+                padding: 4px 8px;
+            }
             .game-area {
                 flex-direction: column;
                 align-items: center;
@@ -531,6 +546,7 @@
         <div class="user-stats">
             <span id="neig-balance">10000 Neig</span><img src="/static/neig.png" alt="Neig">
             <span id="elo-level">ELO: 0 (Nivel 0)</span>
+            <button id="logout-button" onclick="logout()">Cerrar Sesión</button>
         </div>
         <div id="room-selection">
             <h2>Unirse a una sala</h2>
