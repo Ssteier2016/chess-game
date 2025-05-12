@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juego de Ajedrez Nórdico - PeonKing</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Junicode&display=swap" rel="stylesheet">
     <style>
@@ -91,10 +92,31 @@
             background: url('https://www.transparenttextures.com/patterns/parchment.png');
             border: 5px solid #8b5a2b;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
-            display contar: flex;
-            display: none;
+            display: flex;
             flex-direction: column;
             align-items: center;
+            position: relative;
+        }
+        .user-stats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            font-family: 'Junicode', sans-serif;
+            font-size: 16px;
+            color: #d4af37;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        .user-stats img {
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            vertical-align: middle;
         }
         .game-area {
             display: flex;
@@ -154,7 +176,7 @@
             background: #e6d7a3;
             border: 2px solid #8b5a2b;
             color: #000;
-> font-family: 'Junicode', sans-serif;
+            font-family: 'Junicode', sans-serif;
         }
         #chat-send, #record-audio, #stop-audio, #start-video, #stop-video {
             padding: 5px 10px;
@@ -234,11 +256,6 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
         }
-        #bet-amount:disabled {
-            background: #3a2515;
-            color: #8b5a2b;
-            cursor: not-allowed;
-        }
         h2 { text-shadow: 2px 2px 4px #000; }
         #video-container {
             display: flex;
@@ -253,22 +270,6 @@
             margin: 5px 0;
             display: none;
         }
-        .wallet-section {
-            margin: 20px 0;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 15px;
-            border-radius: 10px;
-        }
-        .wallet-section input, .wallet-section button {
-            padding: 10px;
-            margin: 5px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-        }
-        #bet-amount { width: 100px; }
         #waitlist {
             padding: 20px;
             text-align: center;
@@ -405,6 +406,14 @@
                 width: 100%;
                 padding: 10px;
             }
+            .user-stats {
+                font-size: 14px;
+                padding: 5px;
+            }
+            .user-stats img {
+                width: 16px;
+                height: 16px;
+            }
             .game-area {
                 flex-direction: column;
                 align-items: center;
@@ -458,13 +467,6 @@
                 width: 100%;
                 max-width: 200px;
             }
-            .wallet-section input, .wallet-section button {
-                width: 45%;
-                margin: 5px 2%;
-            }
-            #bet-amount {
-                width: 70%;
-            }
             #waitlist button {
                 width: 90%;
             }
@@ -507,7 +509,7 @@
             <input type="text" name="username" placeholder="Usuario" required>
             <input type="password" name="password" placeholder="Contraseña" required>
             <input type="file" name="avatar" accept="image/*" onchange="previewAvatar(event)">
-            <img id="avatar-preview" src="default-avatar.png" alt="Avatar Preview">
+            <img id="avatar-preview" src="/static/default-avatar.png" alt="Avatar Preview">
             <button type="submit">Registrarse</button>
             <p id="register-error" style="color: red;"></p>
         </form>
@@ -522,14 +524,14 @@
         <div id="private-chat-messages"></div>
         <input id="private-chat-input" type="text" placeholder="Escribí tu mensaje...">
         <button onclick="sendPrivateMessage()">Enviar</button>
-        <div>
-            <label><input type="checkbox" id="private-enable-bet"> Apostar</label>
-            <input type="number" id="private-bet-amount" placeholder="Monto en ARS" min="100" step="50">
-            <button onclick="acceptConditions()">Aceptar Condiciones</button>
-        </div>
+        <button onclick="acceptConditions()">Iniciar Partida</button>
         <button onclick="goBackFromPrivateChat()">Volver atrás</button>
     </div>
     <div class="container">
+        <div class="user-stats">
+            <span id="neig-balance">10000 Neig</span><img src="/static/neig.png" alt="Neig">
+            <span id="elo-level">ELO: 0 (Nivel 0)</span>
+        </div>
         <div id="room-selection">
             <h2>Unirse a una sala</h2>
             <input type="text" id="room-id" placeholder="ID de la sala">
@@ -543,8 +545,6 @@
                 <option value="30">30 minutos</option>
             </select>
             <input type="color" id="color-select" value="#FFFFFF">
-            <label><input type="checkbox" id="enable-bet" checked> Duelo</label>
-            <input type="number" id="bet-amount" placeholder="Apuesta ($ARS)" min="100" step="50">
             <button onclick="joinRoom()">Jugar</button>
             <button onclick="joinWaitlist()">Esperar Oponente</button>
             <button id="play-with-bot" onclick="playWithBot()">Jugar con Bot</button>
@@ -553,21 +553,11 @@
         </div>
         <div id="online-players">
             <h3>Jugadores en Línea</h3>
-            <!-- Lista de jugadores se llenará dinámicamente -->
         </div>
-        <div id="global-chat">
-            <!-- Mensajes globales se llenarán dinámicamente -->
-        </div>
+        <div id="global-chat"></div>
         <div>
             <input id="global-chat-input" type="text" placeholder="Chat global">
             <button id="global-chat-send" onclick="sendGlobalMessage()">Enviar</button>
-        </div>
-        <div class="wallet-section">
-            <h2>Billetera</h2>
-            <span id="wallet-balance">Saldo: $0 ARS</span><br>
-            <input type="number" id="deposit-amount" placeholder="Monto a recargar" min="100" step="50">
-            <button onclick="depositMoney()">Recargar con MercadoPago</button>
-            <button onclick="withdrawMoney()">Retirar Dinero</button>
         </div>
         <div id="timers">
             <span id="white-timer">Blancas: --:--</span> | 
@@ -595,175 +585,8 @@
             <button id="resign-button" onclick="resignGame()">Rendirse</button>
         </div>
     </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
-    <script>
-        const socket = io();
-        let game = new Chess();
-        let selectedSquare = null;
-
-        // Funciones de login y registro
-        document.getElementById('login-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const username = this.username.value;
-            const password = this.password.value;
-            socket.emit('login', { username, password });
-        });
-
-        socket.on('login_result', (data) => {
-            if (data.success) {
-                document.getElementById('login-registerRAC').style.display = 'none';
-                document.getElementById('container').style.display = 'flex';
-            } else {
-                document.getElementById('login-error').textContent = data.message;
-            }
-        });
-
-        document.getElementById('register-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const username = this.username.value;
-            const password = this.password.value;
-            socket.emit('register', { username, password });
-        });
-
-        socket.on('register_result', (data) => {
-            if (data.success) {
-                alert('Registro exitoso. Por favor, inicia sesión.');
-            } else {
-                document.getElementById('register-error').textContent = data.message;
-            }
-        });
-
-        function previewAvatar(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById('avatar-preview').src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        // Función para jugar contra el bot
-        function playWithBot() {
-            document.getElementById('room-selection').style.display = 'none';
-            document.getElementById('chessboard').style.display = 'grid';
-            document.getElementById('game-buttons').style.display = 'block';
-            game = new Chess(); // Reiniciar el juego
-            updateBoard();
-            socket.emit('play_against_bot', { fen: game.fen() });
-        }
-
-        // Manejar movimiento del bot
-        socket.on('bot_move', (data) => {
-            game.move({ from: data.move.slice(0, 2), to: data.move.slice(2, 4) });
-            updateBoard();
-            if (!game.game_over()) {
-                // Permitir al jugador mover después del bot
-                enablePlayerMove();
-            }
-        });
-
-        socket.on('game_over', (data) => {
-            alert('Juego terminado: ' + data.result);
-            disableBoard();
-        });
-
-        // Actualizar el tablero
-        function updateBoard() {
-            const board = document.getElementById('chessboard');
-            board.innerHTML = '';
-            const fen = game.fen().split(' ')[0];
-            const rows = fen.split('/');
-            for (let i = 0; i < 8; i++) {
-                let row = rows[7 - i]; // Invertir para que a1 esté abajo a la izquierda
-                for (let j = 0; j < row.length; j++) {
-                    if (isNaN(row[j])) {
-                        const square = document.createElement('div');
-                        square.className = 'square ' + ((i + j) % 2 === 0 ? 'white' : 'black');
-                        square.textContent = row[j];
-                        square.dataset.pos = String.fromCharCode(97 + j) + (i + 1); // e.g., "a1"
-                        square.addEventListener('click', handleSquareClick);
-                        board.appendChild(square);
-                    } else {
-                        for (let k = 0; k < parseInt(row[j]); k++) {
-                            const emptySquare = document.createElement('div');
-                            emptySquare.className = 'square ' + ((i + j + k) % 2 === 0 ? 'white' : 'black');
-                            emptySquare.dataset.pos = String.fromCharCode(97 + j + k) + (i + 1);
-                            emptySquare.addEventListener('click', handleSquareClick);
-                            board.appendChild(emptySquare);
-                        }
-                        j += parseInt(row[j]) - 1;
-                    }
-                }
-            }
-        }
-
-        // Manejar clics en el tablero
-        function handleSquareClick(event) {
-            const pos = event.target.dataset.pos;
-            if (!selectedSquare) {
-                if (event.target.textContent && game.turn() === (event.target.textContent === event.target.textContent.toUpperCase() ? 'w' : 'b')) {
-                    selectedSquare = pos;
-                    event.target.style.backgroundColor = '#d4af37'; // Resaltar selección
-                }
-            } else {
-                const from = selectedSquare;
-                const to = pos;
-                const move = game.move({ from, to });
-                if (move) {
-                    updateBoard();
-                    if (!game.game_over()) {
-                        socket.emit('play_against_bot', { fen: game.fen() });
-                    }
-                }
-                const prevSquare = document.querySelector(`[data-pos="${selectedSquare}"]`);
-                prevSquare.style.backgroundColor = (parseInt(selectedSquare[1]) + selectedSquare.charCodeAt(0)) % 2 === 0 ? '#e6d7a3' : '#8b5a2b';
-                selectedSquare = null;
-            }
-        }
-
-        function enablePlayerMove() {
-            const squares = document.querySelectorAll('.square');
-            squares.forEach(square => square.style.pointerEvents = 'auto');
-        }
-
-        function disableBoard() {
-            const squares = document.querySelectorAll('.square');
-            squares.forEach(square => square.style.pointerEvents = 'none');
-        }
-
-        // Funciones adicionales (sin implementar completamente por simplicidad)
-        function joinRoom() { console.log('Unirse a sala'); }
-        function joinWaitlist() { console.log('Esperar oponente'); }
-        function loadSavedGames() { console.log('Cargar partidas guardadas'); }
-        function goBack() {
-            document.getElementById('chessboard').style.display = 'none';
-            document.getElementById('game-buttons').style.display = 'none';
-            document.getElementById('room-selection').style.display = 'block';
-        }
-        function saveGame() { console.log('Guardar partida'); }
-        function resignGame() { console.log('Rendirse'); }
-        function sendMessage() { console.log('Enviar mensaje'); }
-        function startRecording() { console.log('Grabar audio'); }
-        function stopRecording() { console.log('Detener audio'); }
-        function startVideoCall() { console.log('Iniciar videollamada'); }
-        function stopVideoCall() { console.log('Detener videollamada'); }
-        function goBackFromWaitlist() { console.log('Volver desde lista de espera'); }
-        function sendPrivateMessage() { console.log('Enviar mensaje privado'); }
-        function acceptConditions() { console.log('Aceptar condiciones'); }
-        function goBackFromPrivateChat() { console.log('Volver desde chat privado'); }
-        function sendGlobalMessage() { console.log('Enviar mensaje global'); }
-        function depositMoney() { console.log('Recargar dinero'); }
-        function withdrawMoney() { console.log('Retirar dinero'); }
-
-        // Ocultar pantalla de carga después de 3 segundos
-        setTimeout(() => {
-            document.getElementById('loading-screen').style.display = 'none';
-            document.getElementById('login-register').style.display = 'block';
-        }, 3000);
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.0/simple-peer.min.js"></script>
+    <script src="/static/game.js"></script>
 </body>
 </html>
-    
