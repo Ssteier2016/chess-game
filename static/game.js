@@ -1,4 +1,3 @@
-// Variables Globales
 let room = null;
 let board = null;
 let turn = null;
@@ -14,7 +13,9 @@ let peer = null;
 let localStream = null;
 let playerColors = {};
 let myColor = null;
-let walletBalance = 0;
+let neigBalance = 10000;
+let eloPoints = 0;
+let level = 0;
 let username = null;
 let currentAvatar = null;
 
@@ -25,29 +26,19 @@ const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
-const mp = new MercadoPago('APP_USR-2cfbe7e2-0fbe-4182-acd9-c7ae5702b9ba', { locale: 'es-AR' });
 
-// Funciones de Interfaz y Juego
 function joinRoom() {
     room = document.getElementById('room-id').value.trim();
     const timer = document.getElementById('timer-select').value;
     const color = document.getElementById('color-select').value;
-    const enableBet = document.getElementById('enable-bet').checked;
-    const betAmount = enableBet ? parseInt(document.getElementById('bet-amount').value) || 0 : 0;
-    const isPublic = document.getElementById('public-game').checked;
-    const viewCost = isPublic ? 0 : parseInt(document.getElementById('view-cost').value) || 0;
 
     if (!room) {
         console.log('Error: ID de sala vacío');
         return alert('Por favor, ingresá un ID de sala.');
     }
-    if (enableBet && (betAmount < 100 || betAmount > walletBalance)) {
-        console.log(`Error: Apuesta inválida. Monto: ${betAmount}, Saldo: ${walletBalance}`);
-        return alert('La apuesta debe ser mínimo $100 ARS y no mayor a tu saldo.');
-    }
 
-    console.log(`Intentando unirse a la sala: ${room}, apuesta: ${enableBet ? betAmount : 'sin apuesta'}`);
-    socket.emit('join', { room, timer, color, bet: betAmount, enableBet, isPublic, viewCost });
+    console.log(`Intentando unirse a la sala: ${room}`);
+    socket.emit('join', { room, timer, color });
 }
 
 function playWithBot() {
@@ -222,7 +213,6 @@ function goBack() {
     updateTimers();
 }
 
-// Funciones de Chat y Multimedia
 function sendMessage() {
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
@@ -302,39 +292,14 @@ function stopVideoCall() {
     socket.emit('video_stop', { room });
 }
 
-// Funciones de Billetera
-function depositMoney() {
-    const amount = parseInt(document.getElementById('deposit-amount').value);
-    if (amount >= 100) {
-        socket.emit('deposit_request', { amount, username });
-    } else {
-        alert('El monto mínimo para recargar es $100 ARS.');
-    }
+function updateUserData(data) {
+    neigBalance = data.neig;
+    eloPoints = data.elo;
+    level = data.level;
+    document.getElementById('neig-balance').textContent = `${neigBalance} Neig`;
+    document.getElementById('elo-level').textContent = `ELO: ${eloPoints} (Nivel ${level})`;
 }
 
-function requestDeposit() {
-    const amount = prompt("Monto a depositar:");
-    if (amount) socket.emit('deposit_request', { amount: parseFloat(amount) });
-}
-socket.on('deposit_url', (data) => {
-    window.open(`https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=${data.preference_id}`, '_blank');
-});
-
-function withdrawMoney() {
-    const amount = parseInt(document.getElementById('withdraw-amount').value) || walletBalance;
-    if (amount > 0 && amount <= walletBalance) {
-        socket.emit('withdraw_request', { amount });
-    } else {
-        alert('Cantidad inválida o fondos insuficientes.');
-    }
-}
-
-function updateWalletBalance(balance) {
-    walletBalance = balance;
-    document.getElementById('wallet-balance').textContent = `Saldo: $${balance} ARS`;
-}
-
-// Funciones de Guardado y Abandono
 function saveGame() {
     if (!username) return alert('Debes iniciar sesión para guardar una partida');
     const gameName = prompt('Ingresá un nombre para la partida:');
@@ -360,7 +325,6 @@ function loadGame(gameName) {
     socket.emit('load_game', { username, game_name: gameName });
 }
 
-// Funciones de Chat Privado
 function selectOpponent(opponentSid) {
     socket.emit('select_opponent', { opponent_sid: opponentSid });
 }
@@ -375,17 +339,10 @@ function sendPrivateMessage() {
 }
 
 function acceptConditions() {
-    const enableBet = document.getElementById('private-enable-bet')?.checked || false;
-    const betAmount = enableBet ? parseInt(document.getElementById('private-bet-amount')?.value) || 0 : 0;
-    if (enableBet && (betAmount < 100 || betAmount > walletBalance)) {
-        alert('La apuesta debe ser mínimo $100 ARS y no mayor a tu saldo.');
-        return;
-    }
-    socket.emit('accept_conditions', { room, bet: betAmount, enableBet });
+    socket.emit('accept_conditions', { room });
 }
 
-// Funciones de Autenticación
-function login(usernameInput, password) {  // Acepta parámetros para evitar problemas con el form
+function login(usernameInput, password) {
     socket.emit('login', { username: usernameInput, password });
 }
 
@@ -401,18 +358,28 @@ function register() {
                 document.querySelector('.container').style.display = 'flex';
                 document.getElementById('room-selection').style.display = 'block';
                 socket.emit('join_user_room', { username });
-                socket.emit('get_wallet_balance', { username });
+                socket.emit('get_user_data', { username });
             } else {
                 document.getElementById('register-error').textContent = data.error;
             }
         });
 }
 
-// Eventos Socket.IO
+function previewAvatar(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('avatar-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
 socket.on('connect', () => {
     if (username) {
         socket.emit('join_user_room', { username });
-        socket.emit('get_wallet_balance', { username });
+        socket.emit('get_user_data', { username });
     }
 });
 
@@ -426,22 +393,6 @@ socket.on('global_message', data => {
     msg.textContent = `${data.username}: ${data.message}`;
     globalChat.appendChild(msg);
     globalChat.scrollTop = globalChat.scrollHeight;
-});
-
-socket.on('deposit_url', data => {
-    mp.checkout({
-        preference: { id: data.preference_id },
-        autoOpen: true,
-        onClose: () => {
-            socket.emit('check_deposit', { username });
-            setTimeout(() => socket.emit('check_deposit', { username }), 5000);
-        }
-    });
-});
-
-socket.on('withdraw_success', data => {
-    alert(`Retiro exitoso: $${data.amount} ARS transferidos.`);
-    updateWalletBalance(walletBalance - data.amount);
 });
 
 socket.on('color_assigned', data => {
@@ -532,8 +483,8 @@ socket.on('player_left', data => {
 });
 
 socket.on('game_over', data => {
-    alert(data.message);
-    if (data.new_balance !== undefined) updateWalletBalance(data.new_balance);
+    alert(`${data.message} Ganaste ${data.elo_points} ELO y ${data.neig_points} Neig.`);
+    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
     goBack();
 });
 
@@ -541,7 +492,7 @@ socket.on('check', data => alert(data.message));
 
 socket.on('resigned', data => {
     alert(data.message);
-    if (data.new_balance !== undefined) updateWalletBalance(data.new_balance);
+    updateUserData({ neig: data.neig, elo: data.elo, level: data.level });
     goBack();
 });
 
@@ -580,17 +531,8 @@ socket.on('game_loaded', data => {
     alert(`Partida "${data.game_name}" cargada exitosamente en la sala ${room}`);
 });
 
-socket.on('wallet_update', data => updateWalletBalance(data.balance));
-
-socket.on('wallet_update', (data) => {
-    console.log(`Saldo actualizado: ${data.balance}`);
-    alert(`Nuevo saldo: ${data.balance} ARS`);
-});
-
-socket.on('wallet_balance', data => updateWalletBalance(data.balance));
-
-socket.on('bet_accepted', data => {
-    alert(data.bet > 0 ? `Apuesta de $${data.bet} ARS aceptada.` : `Partida sin apuesta iniciada.`);
+socket.on('user_data_update', data => {
+    updateUserData(data);
 });
 
 socket.on('waiting_opponent', data => alert(data.message));
@@ -638,18 +580,20 @@ socket.on('private_message', data => {
 socket.on('login_success', data => {
     username = data.username;
     currentAvatar = data.avatar;
+    neigBalance = data.neig;
+    eloPoints = data.elo;
+    level = data.level;
+    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
     document.getElementById('login-register').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     document.getElementById('room-selection').style.display = 'block';
     socket.emit('join_user_room', { username });
-    socket.emit('get_wallet_balance', { username });
 });
 
 socket.on('login_error', data => {
     document.getElementById('login-error').textContent = data.error;
 });
 
-// Eventos del DOM
 document.getElementById('login-form')?.addEventListener('submit', e => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -664,7 +608,7 @@ document.getElementById('register-form')?.addEventListener('submit', e => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (username) socket.emit('get_wallet_balance', { username });
+    if (username) socket.emit('get_user_data', { username });
 });
 
 window.onload = () => {
