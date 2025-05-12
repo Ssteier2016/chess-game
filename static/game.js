@@ -42,7 +42,14 @@ function joinRoom() {
 }
 
 function playWithBot() {
-    socket.emit('play_with_bot', {});
+    if (!username) {
+        console.error('No hay usuario logueado');
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    const timer = document.getElementById('timer-select').value;
+    const color = document.getElementById('color-select').value;
+    socket.emit('play_with_bot', { timer, color });
 }
 
 function watchGame(room) {
@@ -504,7 +511,7 @@ socket.on('player_left', data => {
 });
 
 socket.on('game_over', data => {
-    alert(`${data.message} Ganaste ${data.elo_points} ELO y ${data.neig_points} Neig.`);
+    alert(`${data.message} Ganaste ${data.elo_points || 0} ELO y ${data.neig_points || 0} Neig.`);
     updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
     goBack();
 });
