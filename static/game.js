@@ -636,6 +636,7 @@ window.onload = () => {
     setTimeout(() => {
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('login-register').style.display = 'block';
+        document.querySelector('.container').style.display = 'none';
         currentAvatar = '/static/default-avatar.png';
     }, 3000);
 };
