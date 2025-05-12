@@ -9,6 +9,7 @@ import json
 import time
 import chess
 import chess.engine
+import uuid
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')
@@ -22,6 +23,43 @@ players = {}
 games = {}
 online_players = {}
 available_players = {}
+
+def board_to_fen(board, turn):
+    """Convertir el tablero interno a notación FEN."""
+    fen = ''
+    for row in board:
+        empty = 0
+        for square in row:
+            if square == '.':
+                empty += 1
+            else:
+                if empty > 0:
+                    fen += str(empty)
+                    empty = 0
+                fen += square
+        if empty > 0:
+            fen += str(empty)
+        fen += '/'
+    fen = fen[:-1]  # Quitar última barra
+    fen = fen.replace(' ', '')  # Asegurar que no haya espacios
+    fen += f" {'w' if turn == 'white' else 'b'} - - 0 1"
+    return fen
+
+def fen_to_board(fen):
+    """Convertir notación FEN a tablero interno."""
+    board = []
+    fen_parts = fen.split(' ')
+    rows = fen_parts[0].split('/')
+    for row in rows:
+        board_row = []
+        for char in row:
+            if char.isdigit():
+                board_row.extend(['.'] * int(char))
+            else:
+                board_row.append(char)
+        board.append(board_row)
+    turn = 'white' if fen_parts[1] == 'w' else 'black'
+    return board, turn
 
 def reset_board(room=None):
     board = [
@@ -259,13 +297,11 @@ def on_logout(data):
     sid = request.sid
     username = data.get('username')
     if sid in sessions and sessions[sid] == username:
-        # Limpiar sesiones y estado del usuario
         del sessions[sid]
         if sid in online_players:
             del online_players[sid]
         if sid in available_players:
             del available_players[sid]
-        # Abandonar cualquier sala activa
         for room in list(players.keys()):
             if sid in players[room]:
                 del players[room][sid]
@@ -276,10 +312,8 @@ def on_logout(data):
                 else:
                     socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
                 break
-        # Actualizar lista de jugadores en línea
         socketio.emit('online_players_update', list(online_players.values()))
         socketio.emit('waitlist_update', {'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color']} for s, info in available_players.items()]})
-        # Limpiar sesión de Flask
         session.pop('username', None)
 
 @socketio.on('connect')
@@ -394,20 +428,100 @@ def on_watch_game(data):
         join_room(room)
         emit('game_start', games[room], to=sid)
 
-@socketio.on('play_against_bot')
-def handle_play_against_bot(data):
+@socketio.on('play_with_bot')
+def on_play_with_bot(data):
     sid = request.sid
-    fen = data.get('fen', chess.STARTING_FEN)
-    board = chess.Board(fen)
-    
-    if not board.is_game_over():
-        result = engine.play(board, chess.engine.Limit(time=0.1))
-        move = result.move
-        board.push(move)
-        emit('bot_move', {'move': move.uci(), 'fen': board.fen()}, room=sid)
-    
-    if board.is_game_over():
-        emit('game_over', {'result': board.result()}, room=sid)
+    username = sessions.get(sid)
+    if not username:
+        emit('error', {'message': 'Debes iniciar sesión'}, to=sid)
+        return
+
+    timer_minutes = int(data.get('timer', 0))
+    chosen_color = data.get('color', '#FFFFFF')
+    player_color = 'white'  # Por defecto, el usuario juega con blancas
+    bot_color = 'black'
+    bot_name = 'Stockfish'
+
+    # Crear una sala única para la partida contra el bot
+    room = f"bot_{sid}_{str(uuid.uuid4())}"
+    join_room(room)
+
+    players[room] = {
+        sid: {'color': player_color, 'chosen_color': chosen_color, 'username': username},
+        'bot': {'color': bot_color, 'chosen_color': '#000000', 'username': bot_name}
+    }
+
+    board, turn = reset_board(room)
+    games[room] = {
+        'board': board,
+        'turn': turn,
+        'time_white': timer_minutes * 60 if timer_minutes > 0 else None,
+        'time_black': timer_minutes * 60 if timer_minutes > 0 else None,
+        'last_move_time': time.time() if timer_minutes > 0 else None,
+        'is_bot_game': True,
+        'fen': board_to_fen(board, turn)
+    }
+
+    emit('color_assigned', {'color': player_color, 'chosenColor': chosen_color}, to=sid)
+    player_colors = {
+        player_color: chosen_color,
+        bot_color: '#000000'
+    }
+    socketio.emit('game_start', {
+        'board': board,
+        'turn': turn,
+        'time_white': games[room]['time_white'],
+        'time_black': games[room]['time_black'],
+        'playerColors': player_colors
+    }, room=room)
+
+    # Si el usuario juega con negras, el bot (blancas) mueve primero
+    if player_color == 'black':
+        make_bot_move(room, sid)
+
+def make_bot_move(room, sid):
+    if room not in games or not games[room].get('is_bot_game'):
+        return
+
+    board = chess.Board(games[room]['fen'])
+    result = engine.play(board, chess.engine.Limit(time=0.1))
+    move = result.move
+    board.push(move)
+    games[room]['fen'] = board.fen()
+
+    # Convertir el movimiento a coordenadas para el tablero interno
+    start_square = move.from_square
+    end_square = move.to_square
+    start_row, start_col = 7 - (start_square // 8), start_square % 8
+    end_row, end_col = 7 - (end_square // 8), end_square % 8
+
+    games[room]['board'][end_row][end_col] = games[room]['board'][start_row][start_col]
+    games[room]['board'][start_row][start_col] = '.'
+    games[room]['turn'] = 'black' if games[room]['turn'] == 'white' else 'white'
+
+    update_timer(room)
+    socketio.emit('update_board', {'board': games[room]['board'], 'turn': games[room]['turn']}, room=room)
+
+    if is_in_check(games[room]['board'], games[room]['turn']):
+        socketio.emit('check', {'message': '¡Jaque!'}, room=room)
+        if is_checkmate(games[room]['board'], games[room]['turn']):
+            winner_username = sessions[sid] if games[room]['turn'] != players[room][sid]['color'] else 'Stockfish'
+            user_data = load_user_data(sessions[sid])
+            elo_points = 50  # Puntos fijos por vencer al bot
+            neig_points = 25
+            if winner_username == sessions[sid]:
+                user_data['elo'] += elo_points
+                user_data['neig'] += neig_points
+                user_data['level'] = calculate_level(user_data['elo'])
+                save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
+                emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
+            socketio.emit('game_over', {
+                'message': f'¡Jaque mate! Gana {winner_username}',
+                'elo_points': elo_points if winner_username == sessions[sid] else 0,
+                'neig_points': neig_points if winner_username == sessions[sid] else 0
+            }, room=room)
+            del players[room]
+            del games[room]
 
 @socketio.on('move')
 def on_move(data):
@@ -436,39 +550,37 @@ def on_move(data):
                     board[end_row][end_col] = piece
                     board[start_row][start_col] = '.'
                     games[room]['turn'] = 'black' if turn == 'white' else 'white'
+                    if games[room].get('is_bot_game'):
+                        # Actualizar FEN para el bot
+                        games[room]['fen'] = board_to_fen(board, games[room]['turn'])
                     update_timer(room)
                     socketio.emit('update_board', {'board': board, 'turn': games[room]['turn']}, room=room)
                     if is_in_check(board, games[room]['turn']):
                         socketio.emit('check', {'message': '¡Jaque!'}, room=room)
                         if is_checkmate(board, games[room]['turn']):
-                            winner_sid = sid
-                            loser_sid = [s for s in players[room] if s != sid][0]
-                            winner_username = sessions[winner_sid]
-                            loser_username = sessions[loser_sid]
-                            winner_data = load_user_data(winner_username)
-                            loser_data = load_user_data(loser_username)
-                            elo_points = (loser_data['level'] + 1) * 100
-                            neig_points = elo_points // 2
-                            winner_data['elo'] += elo_points
-                            winner_data['neig'] += neig_points
-                            winner_data['level'] = calculate_level(winner_data['elo'])
-                            loser_data['elo'] = max(0, loser_data['elo'] - elo_points)
-                            loser_data['neig'] = max(0, loser_data['neig'] - neig_points)
-                            loser_data['level'] = calculate_level(loser_data['elo'])
-                            save_user_data(winner_username, winner_data['neig'], winner_data['elo'], winner_data['level'])
-                            save_user_data(loser_username, loser_data['neig'], loser_data['elo'], loser_data['level'])
-                            emit('user_data_update', {'neig': winner_data['neig'], 'elo': winner_data['elo'], 'level': winner_data['level']}, to=winner_sid)
-                            emit('user_data_update', {'neig': loser_data['neig'], 'elo': loser_data['elo'], 'level': loser_data['level']}, to=loser_sid)
+                            winner_username = sessions[sid] if games[room]['turn'] != player_color else 'Stockfish'
+                            user_data = load_user_data(sessions[sid])
+                            elo_points = 50 if winner_username == sessions[sid] else 0
+                            neig_points = 25 if winner_username == sessions[sid] else 0
+                            if winner_username == sessions[sid]:
+                                user_data['elo'] += elo_points
+                                user_data['neig'] += neig_points
+                                user_data['level'] = calculate_level(user_data['elo'])
+                            else:
+                                user_data['elo'] = max(0, user_data['elo'] - elo_points)
+                                user_data['neig'] = max(0, user_data['neig'] - neig_points)
+                                user_data['level'] = calculate_level(user_data['elo'])
+                            save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
+                            emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
                             socketio.emit('game_over', {
-                                'message': '¡Jaque mate! Gana ' + ('blancas' if turn == 'black' else 'negras'),
-                                'winner_username': winner_username,
+                                'message': f'¡Jaque mate! Gana {winner_username}',
                                 'elo_points': elo_points,
                                 'neig_points': neig_points
                             }, room=room)
-                            if room in players:
-                                del players[room]
-                            if room in games:
-                                del games[room]
+                            del players[room]
+                            del games[room]
+                    if games[room].get('is_bot_game') and games[room]['turn'] != player_color and room in games:
+                        make_bot_move(room, sid)
                 else:
                     print(f"Movimiento inválido: Deja al rey en jaque")
             else:
@@ -480,40 +592,155 @@ def on_move(data):
 def on_resign(data):
     room = data['room']
     sid = request.sid
-    if room in players and len(players[room]) == 2:
-        winner_sid = [s for s in players[room] if s != sid][0]
-        winner_username = sessions[winner_sid]
-        loser_username = sessions[sid]
-        winner_data = load_user_data(winner_username)
-        loser_data = load_user_data(loser_username)
-        elo_points = (loser_data['level'] + 1) * 100
-        neig_points = elo_points // 2
-        winner_data['elo'] += elo_points
-        winner_data['neig'] += neig_points
-        winner_data['level'] = calculate_level(winner_data['elo'])
-        loser_data['elo'] = max(0, loser_data['elo'] - elo_points)
-        loser_data['neig'] = max(0, loser_data['neig'] - neig_points)
-        loser_data['level'] = calculate_level(loser_data['elo'])
-        save_user_data(winner_username, winner_data['neig'], winner_data['elo'], winner_data['level'])
-        save_user_data(loser_username, loser_data['neig'], loser_data['elo'], loser_data['level'])
-        emit('user_data_update', {'neig': winner_data['neig'], 'elo': winner_data['elo'], 'level': winner_data['level']}, to=winner_sid)
-        emit('user_data_update', {'neig': loser_data['neig'], 'elo': loser_data['elo'], 'level': loser_data['level']}, to=sid)
-        emit('resigned', {
-            'message': f'Oponente abandonó. Ganaste {elo_points} ELO y {neig_points} Neig.',
-            'elo': winner_data['elo'],
-            'neig': winner_data['neig'],
-            'level': winner_data['level']
-        }, to=winner_sid)
-        emit('resigned', {
-            'message': f'Abandonaste la partida. Perdiste {elo_points} ELO y {neig_points} Neig.',
-            'elo': loser_data['elo'],
-            'neig': loser_data['neig'],
-            'level': loser_data['level']
-        }, to=sid)
+    if room in players and sid in players[room]:
+        user_data = load_user_data(sessions[sid])
+        elo_points = 50
+        neig_points = 25
+        if games[room].get('is_bot_game'):
+            user_data['elo'] = max(0, user_data['elo'] - elo_points)
+            user_data['neig'] = max(0, user_data['neig'] - neig_points)
+            user_data['level'] = calculate_level(user_data['elo'])
+            save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
+            emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
+            emit('resigned', {
+                'message': f'Abandonaste la partida contra Stockfish. Perdiste {elo_points} ELO y {neig_points} Neig.',
+                'elo': user_data['elo'],
+                'neig': user_data['neig'],
+                'level': user_data['level']
+            }, to=sid)
+        else:
+            winner_sid = [s for s in players[room] if s != sid][0]
+            winner_username = sessions[winner_sid]
+            loser_username = sessions[sid]
+            winner_data = load_user_data(winner_username)
+            loser_data = load_user_data(loser_username)
+            winner_data['elo'] += elo_points
+            winner_data['neig'] += neig_points
+            winner_data['level'] = calculate_level(winner_data['elo'])
+            loser_data['elo'] = max(0, loser_data['elo'] - elo_points)
+            loser_data['neig'] = max(0, loser_data['neig'] - neig_points)
+            loser_data['level'] = calculate_level(loser_data['elo'])
+            save_user_data(winner_username, winner_data['neig'], winner_data['elo'], winner_data['level'])
+            save_user_data(loser_username, loser_data['neig'], loser_data['elo'], loser_data['level'])
+            emit('user_data_update', {'neig': winner_data['neig'], 'elo': winner_data['elo'], 'level': winner_data['level']}, to=winner_sid)
+            emit('user_data_update', {'neig': loser_data['neig'], 'elo': loser_data['elo'], 'level': loser_data['level']}, to=sid)
+            emit('resigned', {
+                'message': f'Oponente abandonó. Ganaste {elo_points} ELO y {neig_points} Neig.',
+                'elo': winner_data['elo'],
+                'neig': winner_data['neig'],
+                'level': winner_data['level']
+            }, to=winner_sid)
+            emit('resigned', {
+                'message': f'Abandonaste la partida. Perdiste {elo_points} ELO y {neig_points} Neig.',
+                'elo': loser_data['elo'],
+                'neig': loser_data['neig'],
+                'level': loser_data['level']
+            }, to=sid)
         if room in players:
             del players[room]
         if room in games:
             del games[room]
+
+@socketio.on('leave')
+def on_leave(data):
+    room = data['room']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        del players[room][sid]
+        if not players[room]:
+            del players[room]
+            if room in games:
+                del games[room]
+        else:
+            socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
+        leave_room(room)
+
+@socketio.on('chat_message')
+def on_chat_message(data):
+    room = data['room']
+    message = data['message']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        socketio.emit('new_message', {'color': players[room][sid]['color'], 'message': message}, room=room)
+
+@socketio.on('audio_message')
+def on_audio_message(data):
+    room = data['room']
+    audio = data['audio']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        socketio.emit('audio_message', {'color': players[room][sid]['color'], 'audio': audio}, room=room)
+
+@socketio.on('video_signal')
+def on_video_signal(data):
+    room = data['room']
+    signal = data['signal']
+    sid = request.sid
+    if room in players and sid in players[room]:
+        socketio.emit('video_signal', {'signal': signal}, room=room, skip_sid=sid)
+
+@socketio.on('video_stop')
+def on_video_stop(data):
+    room = data['room']
+    socketio.emit('video_stop', {}, room=room)
+
+@socketio.on('save_game')
+def on_save_game(data):
+    room = data['room']
+    game_name = data['game_name']
+    board = data['board']
+    turn = data['turn']
+    sid = request.sid
+    username = sessions.get(sid)
+    if not username:
+        emit('error', {'message': 'Debes iniciar sesión'}, to=sid)
+        return
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('INSERT INTO saved_games (username, room, game_name, board, turn) VALUES (?, ?, ?, ?, ?)',
+              (username, room, game_name, json.dumps(board), turn))
+    conn.commit()
+    conn.close()
+    emit('game_saved', {'message': f'Partida "{game_name}" guardada exitosamente'})
+
+@socketio.on('get_saved_games')
+def on_get_saved_games(data):
+    username = data['username']
+    sid = request.sid
+    if not username or username != sessions.get(sid):
+        emit('error', {'message': 'No autorizado'}, to=sid)
+        return
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('SELECT room, game_name, board, turn FROM saved_games WHERE username = ?', (username,))
+    games_list = [{'room': row[0], 'game_name': row[1], 'board': json.loads(row[2]), 'turn': row[3]} for row in c.fetchall()]
+    conn.close()
+    emit('saved_games_list', {'games': games_list}, to=sid)
+
+@socketio.on('load_game')
+def on_load_game(data):
+    username = data['username']
+    game_name = data['game_name']
+    sid = request.sid
+    if not username or username != sessions.get(sid):
+        emit('error', {'message': 'No autorizado'}, to=sid)
+        return
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('SELECT room, board, turn FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
+    result = c.fetchone()
+    conn.close()
+    if result:
+        room, board, turn = result
+        games[room] = {'board': json.loads(board), 'turn': turn, 'time_white': None, 'time_black': None}
+        players[room] = {sid: {'color': 'white', 'chosen_color': '#FFFFFF', 'username': username}}
+        join_room(room)
+        emit('game_loaded', {
+            'room': room,
+            'board': json.loads(board),
+            'turn': turn,
+            'game_name': game_name
+        }, to=sid)
 
 @socketio.on('join_waitlist')
 def on_join_waitlist(data):
@@ -523,93 +750,57 @@ def on_join_waitlist(data):
     avatar = data.get('avatar', '/static/default-avatar.png')
     if username and sid not in available_players:
         available_players[sid] = {'username': username, 'chosen_color': chosen_color, 'avatar': avatar}
-        players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                        for s, info in available_players.items()]
-        socketio.emit('waitlist_update', {'players': players_list})
-
-@socketio.on('select_opponent')
-def on_select_opponent(data):
-    opponent_sid = data.get('opponent_sid')
-    player_sid = request.sid
-    username = sessions.get(player_sid)
-    
-    if not opponent_sid or opponent_sid not in available_players:
-        emit('error', {'message': 'El oponente seleccionado no está disponible.'})
-        return
-    
-    if player_sid not in available_players:
-        emit('error', {'message': 'No estás en la lista de espera.'})
-        return
-
-    player_data = available_players[player_sid]
-    opponent_data = available_players[opponent_sid]
-    
-    room = f"private_{player_sid}_{opponent_sid}"
-    
-    players[room] = {
-        player_sid: {'color': 'white', 'chosen_color': player_data['chosen_color'], 'avatar': player_data['avatar']},
-        opponent_sid: {'color': 'black', 'chosen_color': opponent_data['chosen_color'], 'avatar': opponent_data['avatar']}
-    }
-    
-    del available_players[player_sid]
-    del available_players[opponent_sid]
-    
-    emit('private_chat_start', {'room': room, 'opponent': opponent_data['username'], 'players': players[room]}, to=player_sid)
-    emit('private_chat_start', {'room': room, 'opponent': username, 'players': players[room]}, to=opponent_sid)
-    
-    players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                    for s, info in available_players.items()]
-    socketio.emit('waitlist_update', {'players': players_list})
+        socketio.emit('waitlist_update', {
+            'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} for s, info in available_players.items()]
+        })
 
 @socketio.on('leave_waitlist')
 def on_leave_waitlist():
     sid = request.sid
     if sid in available_players:
-        username = available_players[sid]['username']
         del available_players[sid]
-        players_list = [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                        for s, info in available_players.items()]
-        socketio.emit('waitlist_update', {'players': players_list})
+        socketio.emit('waitlist_update', {
+            'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} for s, info in available_players.items()]
+        })
 
-@socketio.on('leave_private_chat')
-def on_leave_private_chat(data):
+@socketio.on('select_opponent')
+def on_select_opponent(data):
     sid = request.sid
-    room = data['room']
-    if room in players and sid in players[room]:
-        del players[room][sid]
-        if not players[room]:
-            del players[room]
-            if room in games:
-                del games[room]
-        else:
-            socketio.emit('player_left', {'message': 'Opponent disconnected'}, room=room)
-        leave_room(room)
+    opponent_sid = data['opponent_sid']
+    if opponent_sid in available_players and sid in available_players:
+        room = f"private_{sid}_{opponent_sid}"
+        username = sessions[sid]
+        opponent_username = available_players[opponent_sid]['username']
+        join_room(room, sid)
+        join_room(room, opponent_sid)
+        emit('private_chat_start', {'room': room, 'opponent': opponent_username}, to=sid)
+        emit('private_chat_start', {'room': room, 'opponent': username}, to=opponent_sid)
+        del available_players[sid]
+        del available_players[opponent_sid]
+        socketio.emit('waitlist_update', {
+            'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} for s, info in available_players.items()]
+        })
 
 @socketio.on('private_message')
 def on_private_message(data):
     room = data['room']
-    sid = request.sid
     message = data['message']
+    sid = request.sid
     username = sessions.get(sid)
-    if room in players and sid in players[room]:
-        color = players[room][sid]['chosen_color']
-        socketio.emit('private_message', {'username': username, 'color': color, 'message': message}, room=room)
+    socketio.emit('private_message', {'username': username, 'message': message}, room=room)
 
 @socketio.on('accept_conditions')
 def on_accept_conditions(data):
     room = data['room']
     sid = request.sid
-    if room in players and sid in players[room]:
-        emit('game_start', {}, room=room)
+    username = sessions.get(sid)
+    if room not in players:
+        players[room] = {}
+    players[room][sid] = {'color': 'white' if len(players[room]) == 0 else 'black', 'chosen_color': '#FFFFFF', 'username': username}
+    if len(players[room]) == 2:
         board, turn = reset_board(room)
-        games[room] = {
-            'board': board,
-            'turn': turn,
-            'time_white': None,
-            'time_black': None,
-            'last_move_time': None
-        }
-        player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
+        games[room] = {'board': board, 'turn': turn, 'time_white': None, 'time_black': None}
+        player_colors = {players[room][s]['color']: players[room][s]['chosen_color'] for s in players[room]}
         socketio.emit('game_start', {
             'board': board,
             'turn': turn,
@@ -618,120 +809,15 @@ def on_accept_conditions(data):
             'playerColors': player_colors
         }, room=room)
 
-@socketio.on('chat_message')
-def on_chat_message(data):
+@socketio.on('leave_private_chat')
+def on_leave_private_chat(data):
     room = data['room']
     sid = request.sid
-    message = data['message']
-    color = players[room][sid]['color']
-    socketio.emit('new_message', {'color': color, 'message': message}, room=room)
-
-@socketio.on('audio_message')
-def on_audio_message(data):
-    room = data['room']
-    sid = request.sid
-    if room in players and sid in players[room]:
-        audio_data = data['audio']
-        color = players[room][sid]['color']
-        socketio.emit('audio_message', {'color': color, 'audio': audio_data}, room=room)
-
-@socketio.on('video_signal')
-def on_video_signal(data):
-    room = data['room']
-    sid = request.sid
-    signal = data['signal']
-    for player_sid in players[room]:
-        if player_sid != sid:
-            emit('video_signal', {'signal': signal}, to=player_sid)
-
-@socketio.on('play_with_bot')
-def on_play_with_bot(data):
-    handle_play_against_bot(data)
-
-@socketio.on('global_message')
-def on_global_message(data):
-    sid = request.sid
-    username = sessions.get(sid)
-    if username:
-        emit('global_message', {'username': username, 'message': data['message']}, broadcast=True)
-
-@socketio.on('video_stop')
-def on_video_stop(data):
-    room = data['room']
-    sid = request.sid
-    if room in players and sid in players[room]:
-        for player_sid in players[room]:
-            if player_sid != sid:
-                emit('video_stop', to=player_sid)
-
-@socketio.on('save_game')
-def on_save_game(data):
-    room = data['room']
-    sid = request.sid
-    username = sessions.get(sid)
-    if not username:
-        emit('error', {'message': 'No estás autenticado'}, to=sid)
-        return
-    game_name = data['game_name']
-    board_json = json.dumps(data['board'])
-    turn = data['turn']
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute('INSERT INTO saved_games (username, room, game_name, board, turn) VALUES (?, ?, ?, ?, ?)', 
-              (username, room, game_name, board_json, turn))
-    conn.commit()
-    conn.close()
-    socketio.emit('game_saved', {'message': f'Partida "{game_name}" guardada exitosamente'}, room=room)
-
-@socketio.on('get_saved_games')
-def on_get_saved_games(data):
-    username = data['username']
-    sid = request.sid
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute('SELECT game_name, room FROM saved_games WHERE username = ?', (username,))
-    games_list = [{'game_name': row[0], 'room': row[1]} for row in c.fetchall()]
-    conn.close()
-    socketio.emit('saved_games_list', {'games': games_list}, to=sid)
-
-@socketio.on('load_game')
-def on_load_game(data):
-    username = data['username']
-    game_name = data['game_name']
-    sid = request.sid
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute('SELECT board, turn, room FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
-    result = c.fetchone()
-    conn.close()
-    if result:
-        board = json.loads(result[0])
-        turn = result[1]
-        room = result[2]
-        join_room(room)
-        if room not in players:
-            players[room] = {}
-        if len(players[room]) >= 2:
-            emit('error', {'message': 'La sala está llena'}, to=sid)
-            leave_room(room)
-            return
-        color = 'white' if len(players[room]) == 0 else 'black'
-        players[room][sid] = {'color': color, 'chosen_color': '#FFFFFF'}
-        emit('color_assigned', {'color': color, 'chosenColor': '#FFFFFF'}, to=sid)
-        games[room] = {'board': board, 'turn': turn, 'time_white': None, 'time_black': None, 'last_move_time': None}
-        emit('game_loaded', {'board': board, 'turn': turn, 'game_name': game_name, 'room': room}, to=sid)
-        if len(players[room]) == 2:
-            player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
-            socketio.emit('game_start', {
-                'board': board,
-                'turn': turn,
-                'time_white': None,
-                'time_black': None,
-                'playerColors': player_colors
-            }, room=room)
+    leave_room(room)
+    if room in players:
+        del players[room]
+    if room in games:
+        del games[room]
 
 if __name__ == '__main__':
-    players.clear()
-    games.clear()
-    port = int(os.getenv("PORT", 10000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=not os.getenv('RENDER'))
+    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 10000)))
