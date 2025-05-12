@@ -254,6 +254,34 @@ def on_login(data):
     else:
         emit('login_error', {'error': 'Usuario o contraseña incorrectos'}, to=sid)
 
+@socketio.on('logout')
+def on_logout(data):
+    sid = request.sid
+    username = data.get('username')
+    if sid in sessions and sessions[sid] == username:
+        # Limpiar sesiones y estado del usuario
+        del sessions[sid]
+        if sid in online_players:
+            del online_players[sid]
+        if sid in available_players:
+            del available_players[sid]
+        # Abandonar cualquier sala activa
+        for room in list(players.keys()):
+            if sid in players[room]:
+                del players[room][sid]
+                if not players[room]:
+                    del players[room]
+                    if room in games:
+                        del games[room]
+                else:
+                    socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
+                break
+        # Actualizar lista de jugadores en línea
+        socketio.emit('online_players_update', list(online_players.values()))
+        socketio.emit('waitlist_update', {'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color']} for s, info in available_players.items()]})
+        # Limpiar sesión de Flask
+        session.pop('username', None)
+
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
