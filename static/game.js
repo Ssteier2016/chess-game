@@ -346,6 +346,27 @@ function login(usernameInput, password) {
     socket.emit('login', { username: usernameInput, password });
 }
 
+function logout() {
+    if (!username) return;
+    socket.emit('logout', { username });
+    username = null;
+    currentAvatar = null;
+    neigBalance = 10000;
+    eloPoints = 0;
+    level = 0;
+    document.getElementById('login-register').style.display = 'block';
+    document.querySelector('.container').style.display = 'none';
+    document.getElementById('room-selection').style.display = 'none';
+    document.getElementById('waitlist').style.display = 'none';
+    document.getElementById('private-chat').style.display = 'none';
+    document.getElementById('neig-balance').textContent = '10000 Neig';
+    document.getElementById('elo-level').textContent = 'ELO: 0 (Nivel 0)';
+    goBack();
+    stopVideoCall();
+    socket.disconnect();
+    socket.connect();
+}
+
 function register() {
     const formData = new FormData(document.getElementById('register-form'));
     fetch('/register', { method: 'POST', body: formData })
