@@ -473,6 +473,7 @@ def on_play_with_bot(data):
         'time_white': games[room]['time_white'],
         'time_black': games[room]['time_black'],
         'playerColors': player_colors
+        'room': room  # Enviar el ID de la sala al cliente
     }, room=room)
 
     # Si el usuario juega con negras, el bot (blancas) mueve primero
