@@ -536,11 +536,17 @@ def on_move(data):
         return
     
     game = games[room]
-    chessboard = game['board']
+    chessboard = game['chessboard']
+    board = game['board']
     
     # Crear el movimiento en notación UCI
     move_uci = from_square + to_square
-    move = chess.Move.from_uci(move_uci)
+    try:
+        move = chess.Move.from_uci(move_uci)
+    except ValueError:
+        print(f"Movimiento inválido: {move_uci}")
+        socketio.emit('error', {'message': 'Movimiento inválido'}, room=room)
+        return
     
     # Verificar si el movimiento es legal
     if move in chessboard.legal_moves:
