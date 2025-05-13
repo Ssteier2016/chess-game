@@ -472,7 +472,7 @@ def on_play_with_bot(data):
         'turn': turn,
         'time_white': games[room]['time_white'],
         'time_black': games[room]['time_black'],
-        'playerColors': player_colors
+        'playerColors': player_colors,
         'room': room,
         'is_bot_game': True
     }, room=room)
