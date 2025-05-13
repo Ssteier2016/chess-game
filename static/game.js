@@ -135,12 +135,6 @@ function handleSquareClick(event) {
     const row = parseInt(event.target.dataset.row);
     const col = parseInt(event.target.dataset.col);
 
-    if (!room) {
-        console.log('Error: No estás en una sala');
-        alert('No estás en una sala');
-        return;
-    }
-
     if (myColor !== turn) {
         console.log(`No es tu turno. Turno actual: ${turn}, Tu color: ${myColor}`);
         alert('No es tu turno');
