@@ -527,68 +527,63 @@ def make_bot_move(room, sid):
 
 @socketio.on('move')
 def on_move(data):
+    from_square = data['from']  # Ejemplo: 'e2'
+    to_square = data['to']      # Ejemplo: 'e4'
     room = data['room']
-    sid = request.sid
-    start_row = data['start_row']
-    start_col = data['start_col']
-    end_row = data['end_row']
-    end_col = data['end_col']
-
-    if room in games and room in players and sid in players[room]:
-        board = games[room]['board']
-        turn = games[room]['turn']
-        piece = board[start_row][start_col]
-        player_color = players[room][sid]['color']
-
-        if turn != player_color:
-            return
-
-        if piece != '.' and ((turn == 'white' and is_white(piece)) or (turn == 'black' and is_black(piece))):
-            if is_valid_move(piece, start_row, start_col, end_row, end_col, board):
-                temp_board = [row[:] for row in board]
-                temp_board[end_row][end_col] = piece
-                temp_board[start_row][start_col] = '.'
-                if not is_in_check(temp_board, turn):
-                    board[end_row][end_col] = piece
-                    board[start_row][start_col] = '.'
-                    games[room]['turn'] = 'black' if turn == 'white' else 'white'
-                    if games[room].get('is_bot_game'):
-                        # Actualizar FEN para el bot
-                        games[room]['fen'] = board_to_fen(board, games[room]['turn'])
-                    update_timer(room)
-                    socketio.emit('update_board', {'board': board, 'turn': games[room]['turn']}, room=room)
-                    if is_in_check(board, games[room]['turn']):
-                        socketio.emit('check', {'message': '¡Jaque!'}, room=room)
-                        if is_checkmate(board, games[room]['turn']):
-                            winner_username = sessions[sid] if games[room]['turn'] != player_color else 'Stockfish'
-                            user_data = load_user_data(sessions[sid])
-                            elo_points = 50 if winner_username == sessions[sid] else 0
-                            neig_points = 25 if winner_username == sessions[sid] else 0
-                            if winner_username == sessions[sid]:
-                                user_data['elo'] += elo_points
-                                user_data['neig'] += neig_points
-                                user_data['level'] = calculate_level(user_data['elo'])
-                            else:
-                                user_data['elo'] = max(0, user_data['elo'] - elo_points)
-                                user_data['neig'] = max(0, user_data['neig'] - neig_points)
-                                user_data['level'] = calculate_level(user_data['elo'])
-                            save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
-                            emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
-                            socketio.emit('game_over', {
-                                'message': f'¡Jaque mate! Gana {winner_username}',
-                                'elo_points': elo_points,
-                                'neig_points': neig_points
-                            }, room=room)
-                            del players[room]
-                            del games[room]
-                    if games[room].get('is_bot_game') and games[room]['turn'] != player_color and room in games:
-                        make_bot_move(room, sid)
-                else:
-                    print(f"Movimiento inválido: Deja al rey en jaque")
-            else:
-                print(f"Movimiento inválido: Regla de pieza no cumplida")
-        else:
-            print(f"Movimiento inválido: Pieza incorrecta para el turno {turn}")
+    
+    if room not in games:
+        print(f"Error: Sala {room} no encontrada")
+        return
+    
+    game = games[room]
+    chessboard = game['board']
+    
+    # Crear el movimiento en notación UCI
+    move_uci = from_square + to_square
+    move = chess.Move.from_uci(move_uci)
+    
+    # Verificar si el movimiento es legal
+    if move in chessboard.legal_moves:
+        # Aplicar el movimiento
+        chessboard.push(move)
+        game['turn'] = 'black' if game['turn'] == 'white' else 'white'
+        
+        # Convertir el tablero a formato de lista para el cliente
+        board_state = [['.' for _ in range(8)] for _ in range(8)]
+        for square in chess.SQUARES:
+            piece = chessboard.piece_at(square)
+            if piece:
+                row, col = 7 - (square // 8), square % 8
+                board_state[row][col] = piece.symbol()
+        
+        # Emitir actualización del tablero
+        socketio.emit('update_board', {
+            'board': board_state,
+            'turn': game['turn']
+        }, room=room)
+        
+        # Si es una partida contra el bot, hacer que el bot responda
+        if room.startswith('bot_') and game['turn'] != game['player_color']:
+            bot_move = make_bot_move(chessboard)
+            if bot_move:
+                chessboard.push(bot_move)
+                game['turn'] = game['player_color']
+                # Actualizar el tablero nuevamente
+                for square in chess.SQUARES:
+                    piece = chessboard.piece_at(square)
+                    if piece:
+                        row, col = 7 - (square // 8), square % 8
+                        board_state[row][col] = piece.symbol()
+                    else:
+                        row, col = 7 - (square // 8), square % 8
+                        board_state[row][col] = '.'
+                socketio.emit('update_board', {
+                    'board': board_state,
+                    'turn': game['turn']
+                }, room=room)
+    else:
+        print(f"Movimiento ilegal: {move_uci}")
+        socketio.emit('error', {'message': 'Movimiento ilegal'}, room=room)
 
 @socketio.on('resign')
 def on_resign(data):
