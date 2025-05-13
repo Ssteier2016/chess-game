@@ -1,1 +1,11 @@
-./render-build.sh
+services:
+  - type: web
+    name: chess-game
+    env: python
+    buildCommand: ./render-build.sh
+    startCommand: gunicorn app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+    plan: free
+
