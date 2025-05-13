@@ -375,7 +375,6 @@ function logout() {
     socket.disconnect();
     socket.connect();
 }
-let selectedSquare = null;
 
 function handleTouchStart(event) {
     event.preventDefault();
