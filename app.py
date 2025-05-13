@@ -18,7 +18,6 @@ DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else '
 stockfish_path = "./bin/stockfish"
 engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
-
 sessions = {}
 players = {}
 games = {}
