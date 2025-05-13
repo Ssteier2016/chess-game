@@ -132,8 +132,6 @@ function renderBoard() {
     }
 }
 
-let selectedSquare = null;
-
 function handleSquareClick(event) {
     const square = event.target.closest('.square');
     if (!square) return;
