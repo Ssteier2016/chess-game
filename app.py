@@ -15,7 +15,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')
 socketio = SocketIO(app, cors_allowed_origins="*")
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
-stockfish_path = "/usr/local/bin/stockfish"
+stockfish_path = "./bin/stockfish"
 engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
 
