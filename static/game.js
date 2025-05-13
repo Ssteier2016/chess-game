@@ -398,7 +398,6 @@ function handleTouchEnd(event) {
     selectedSquare = null;
 }
 
-const chessboard = document.getElementById('chessboard');
 chessboard.addEventListener('touchstart', handleTouchStart);
 chessboard.addEventListener('touchend', handleTouchEnd);
 
