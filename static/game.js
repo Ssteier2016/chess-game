@@ -18,6 +18,7 @@ let eloPoints = 0;
 let level = 0;
 let username = null;
 let currentAvatar = null;
+let isBotGame = false;
 
 const socket = io(location.hostname === 'localhost' ? 'http://localhost:10000' : 'https://peonkingame.onrender.com');
 const chessboard = document.getElementById('chessboard');
@@ -131,26 +132,35 @@ function renderBoard() {
     }
 }
 
-function handleSquareClick(event) {
-    const row = parseInt(event.target.dataset.row);
-    const col = parseInt(event.target.dataset.col);
+let selectedSquare = null;
 
+function handleSquareClick(event) {
+    const square = event.target.closest('.square');
+    if (!square) return;
+    const row = parseInt(square.dataset.row);
+    const col = parseInt(square.dataset.col);
+    if (!room && !isBotGame) {
+        console.log('Error: No estás en una sala');
+        alert('No estás en una sala');
+        return;
+    }
     if (myColor !== turn) {
         console.log(`No es tu turno. Turno actual: ${turn}, Tu color: ${myColor}`);
         alert('No es tu turno');
         return;
     }
-
+    const piece = board[row][col];
+    const position = String.fromCharCode(97 + col) + (8 - row); // Ej., "e4"
     if (!selectedSquare) {
-        if (board[row][col] !== '.' && ((myColor === 'white' && isWhite(board[row][col])) || (myColor === 'black' && !isWhite(board[row][col])))) {
-            selectedSquare = { row, col };
-            event.target.style.backgroundColor = '#d4af37';
+        if (piece !== '.' && ((myColor === 'white' && isWhite(piece)) || (myColor === 'black' && !isWhite(piece)))) {
+            selectedSquare = square;
+            square.classList.add('selected');
         }
     } else {
-        const startRow = selectedSquare.row;
-        const startCol = selectedSquare.col;
-        socket.emit('move', { room, start_row: startRow, start_col: startCol, end_row: row, end_col: col });
-        document.querySelector(`.square[data-row="${startRow}"][data-col="${startCol}"]`).style.backgroundColor = '';
+        const from = String.fromCharCode(97 + parseInt(selectedSquare.dataset.col)) + (8 - parseInt(selectedSquare.dataset.row));
+        const to = position;
+        socket.emit('move', { from, to, room });
+        selectedSquare.classList.remove('selected');
         selectedSquare = null;
     }
 }
@@ -367,6 +377,33 @@ function logout() {
     socket.disconnect();
     socket.connect();
 }
+let selectedSquare = null;
+
+function handleTouchStart(event) {
+    event.preventDefault();
+    const square = event.target.closest('.square');
+    if (!square) return;
+    selectedSquare = square;
+    square.classList.add('selected');
+}
+
+function handleTouchEnd(event) {
+    event.preventDefault();
+    if (!selectedSquare) return;
+    const touchEndPos = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
+    const square = document.elementFromPoint(touchEndPos.x, touchEndPos.y);
+    if (square && square.classList.contains('square') && square !== selectedSquare) {
+        const from = String.fromCharCode(97 + parseInt(selectedSquare.dataset.col)) + (8 - parseInt(selectedSquare.dataset.row));
+        const to = String.fromCharCode(97 + parseInt(square.dataset.col)) + (8 - parseInt(square.dataset.row));
+        socket.emit('move', { from, to, room });
+    }
+    selectedSquare.classList.remove('selected');
+    selectedSquare = null;
+}
+
+const chessboard = document.getElementById('chessboard');
+chessboard.addEventListener('touchstart', handleTouchStart);
+chessboard.addEventListener('touchend', handleTouchEnd);
 
 function register() {
     const formData = new FormData(document.getElementById('register-form'));
@@ -423,6 +460,8 @@ socket.on('color_assigned', data => {
 });
 
 socket.on('game_start', data => {
+    room = data.room; // Asignar el ID de la sala
+    isBotGame = data.is_bot_game || false; // Indicar si es partida con bot
     board = data.board;
     turn = data.turn;
     timeWhite = data.time_white;
@@ -439,6 +478,7 @@ socket.on('game_start', data => {
     renderBoard();
     updateTimers();
     if (timeWhite !== null && timeBlack !== null) startTimer();
+    console.log('Partida iniciada en sala:', room);
 });
 
 socket.on('update_board', data => {
