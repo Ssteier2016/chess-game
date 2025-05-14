@@ -46,7 +46,10 @@ function initializeChessboard() {
 }
 
 function renderBoard() {
-    if (!board) return;
+    if (!board) {
+        console.log('Tablero no inicializado');
+        return;
+    }
     const pieceSymbols = {
         'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
         'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
@@ -82,6 +85,10 @@ function handleSquareClick(event) {
     }
     if (myColor !== turn) {
         alert('No es tu turno.');
+        return;
+    }
+    if (!board) {
+        console.log('Tablero no inicializado en handleSquareClick');
         return;
     }
     const square = event.target.closest('.square');
@@ -120,15 +127,20 @@ function handleSquareClick(event) {
 }
 
 function handleTouchStart(event) {
-    if (!username || (myColor !== turn) || (!room && !isBotGame)) return;
+    if (!username || (myColor !== turn) || (!room && !isBotGame) || !board) return;
     const square = event.target.closest('.square');
     if (!square) return;
-    selectedSquare = square;
-    square.classList.add('selected');
+    const row = parseInt(square.dataset.row);
+    const col = parseInt(square.dataset.col);
+    const piece = board[row][col];
+    if (piece !== '.' && ((myColor === 'white' && isWhite(piece)) || (myColor === 'black' && !isWhite(piece)))) {
+        selectedSquare = square;
+        square.classList.add('selected');
+    }
 }
 
 function handleTouchEnd(event) {
-    if (!selectedSquare) return;
+    if (!selectedSquare || !board) return;
     const touchEndPos = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
     const square = document.elementFromPoint(touchEndPos.x, touchEndPos.y);
     if (square && square.classList.contains('square') && square !== selectedSquare) {
@@ -231,7 +243,6 @@ function goBackFromPrivateChat() {
     room = null;
 }
 
-// Función para enviar mensajes al chat global
 function sendGlobalChatMessage() {
     if (!username) {
         alert('Por favor, iniciá sesión para usar el chat global.');
@@ -245,20 +256,33 @@ function sendGlobalChatMessage() {
     }
 }
 
-// Manejar mensajes globales recibidos
 socket.on('new_global_message', data => {
     const chat = document.getElementById('global-chat-messages');
-    const messageElement = document.createElement('div');
-    messageElement.textContent = `[${data.timestamp}] ${data.username}: ${data.message}`;
-    chat.appendChild(messageElement);
-    chat.scrollTop = chat.scrollHeight; // Auto-scroll al último mensaje
+    if (chat) {
+        const messageElement = document.createElement('div');
+        messageElement.textContent = `[${data.timestamp}] ${data.username}: ${data.message}`;
+        chat.appendChild(messageElement);
+        chat.scrollTop = chat.scrollHeight;
+    } else {
+        console.error('Elemento global-chat-messages no encontrado');
+    }
 });
 
-// Manejar errores del chat
-socket.on('error', data => {
-    if (data.message.includes('chat global')) {
-        alert(data.message);
+socket.on('bot_chat_message', data => {
+    if (isBotGame) {
+        const chat = document.getElementById('chat-messages');
+        if (chat) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `Stockfish: ${data.message}`;
+            chat.appendChild(messageElement);
+            chat.scrollTop = chat.scrollHeight;
+        }
     }
+});
+
+socket.on('error', data => {
+    console.log('Error recibido:', data.message);
+    alert(data.message);
 });
 
 function sendPrivateMessage() {
@@ -568,7 +592,6 @@ socket.on('online_players_update', players => {
     renderOnlinePlayers(players);
 });
 
-
 socket.on('color_assigned', data => {
     myColor = data.color;
     playerColors[data.color] = data.chosenColor;
@@ -589,7 +612,7 @@ socket.on('game_start', data => {
     gameButtons.style.display = 'block';
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
-    document.querySelector('.contaier').style.display = 'flex';
+    document.querySelector('.container').style.display = 'flex';
     initializeChessboard();
     renderBoard();
     updateTimers();
@@ -600,6 +623,7 @@ socket.on('update_board', data => {
     board = data.board;
     turn = data.turn;
     previousBoard = JSON.parse(JSON.stringify(board));
+    selectedSquare = null;
     renderBoard();
 });
 
@@ -671,11 +695,6 @@ socket.on('resigned', data => {
     alert(data.message);
     updateUserData({ neig: data.neig, elo: data.elo, level: data.level });
     goBack();
-});
-
-socket.on('error', data => {
-    console.log('Error recibido:', data.message);
-    alert(data.message);
 });
 
 socket.on('game_saved', data => alert(data.message));
