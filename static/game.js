@@ -27,6 +27,7 @@ const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
+const promotionModal = document.getElementById('promotion-modal');
 
 function joinRoom() {
     room = document.getElementById('room-id').value.trim();
@@ -35,10 +36,10 @@ function joinRoom() {
 
     if (!room) {
         console.log('Error: ID de sala vacío');
-        return alert('Por favor, ingresá un ID de sala.');
+        alert('Por favor, ingresá un ID de sala.');
+        return;
     }
 
-    console.log(`Intentando unirse a la sala: ${room}`);
     socket.emit('join', { room, timer, color });
 }
 
@@ -50,7 +51,9 @@ function playWithBot() {
     }
     const timer = document.getElementById('timer-select').value;
     const color = document.getElementById('color-select').value;
-    socket.emit('play_with_bot', { timer, color });
+    const difficulty = document.getElementById('difficulty-select').value;
+    const player_color = document.getElementById('player-color-select').value;
+    socket.emit('play_with_bot', { timer, color, difficulty, player_color });
 }
 
 function watchGame(room) {
@@ -148,16 +151,32 @@ function handleSquareClick(event) {
         return;
     }
     const piece = board[row][col];
-    const position = String.fromCharCode(97 + col) + (8 - row); // Ej., "e4"
+    const position = String.fromCharCode(97 + col) + (8 - row);
     if (!selectedSquare) {
         if (piece !== '.' && ((myColor === 'white' && isWhite(piece)) || (myColor === 'black' && !isWhite(piece)))) {
             selectedSquare = square;
             square.classList.add('selected');
         }
     } else {
-        const from = String.fromCharCode(97 + parseInt(selectedSquare.dataset.col)) + (8 - parseInt(selectedSquare.dataset.row));
+        const fromRow = parseInt(selectedSquare.dataset.row);
+        const fromCol = parseInt(selectedSquare.dataset.col);
+        const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
         const to = position;
-        socket.emit('move', { from, to, room });
+        
+        let promotion = null;
+        if (piece.toLowerCase() === 'p' && ((myColor === 'white' && row === 0) || (myColor === 'black' && row === 7))) {
+            document.getElementById('promotion-modal').style.display = 'flex';
+            return new Promise(resolve => {
+                window.selectPromotion = function(piece) {
+                    promotion = piece;
+                    document.getElementById('promotion-modal').style.display = 'none';
+                    socket.emit('move', { from, to, room, promotion });
+                    resolve();
+                };
+            });
+        } else {
+            socket.emit('move', { from, to, room, promotion });
+        }
         selectedSquare.classList.remove('selected');
         selectedSquare = null;
     }
@@ -377,7 +396,6 @@ function logout() {
 }
 
 function handleTouchStart(event) {
-    event.preventDefault();
     const square = event.target.closest('.square');
     if (!square) return;
     selectedSquare = square;
@@ -385,21 +403,39 @@ function handleTouchStart(event) {
 }
 
 function handleTouchEnd(event) {
-    event.preventDefault();
     if (!selectedSquare) return;
     const touchEndPos = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
     const square = document.elementFromPoint(touchEndPos.x, touchEndPos.y);
     if (square && square.classList.contains('square') && square !== selectedSquare) {
-        const from = String.fromCharCode(97 + parseInt(selectedSquare.dataset.col)) + (8 - parseInt(selectedSquare.dataset.row));
-        const to = String.fromCharCode(97 + parseInt(square.dataset.col)) + (8 - parseInt(square.dataset.row));
-        socket.emit('move', { from, to, room });
+        const fromRow = parseInt(selectedSquare.dataset.row);
+        const fromCol = parseInt(selectedSquare.dataset.col);
+        const toRow = parseInt(square.dataset.row);
+        const toCol = parseInt(square.dataset.col);
+        const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
+        const to = String.fromCharCode(97 + toCol) + (8 - toRow);
+        
+        let promotion = null;
+        const piece = board[fromRow][fromCol];
+        if (piece.toLowerCase() === 'p' && ((myColor === 'white' && toRow === 0) || (myColor === 'black' && toRow === 7))) {
+            document.getElementById('promotion-modal').style.display = 'flex';
+            return new Promise(resolve => {
+                window.selectPromotion = function(piece) {
+                    promotion = piece;
+                    document.getElementById('promotion-modal').style.display = 'none';
+                    socket.emit('move', { from, to, room, promotion });
+                    resolve();
+                };
+            });
+        } else {
+            socket.emit('move', { from, to, room, promotion });
+        }
     }
     selectedSquare.classList.remove('selected');
     selectedSquare = null;
 }
 
-chessboard.addEventListener('touchstart', handleTouchStart);
-chessboard.addEventListener('touchend', handleTouchEnd);
+chessboard.addEventListener('touchstart', handleTouchStart, { passive: true });
+chessboard.addEventListener('touchend', handleTouchEnd, { passive: true });
 
 function register() {
     const formData = new FormData(document.getElementById('register-form'));
@@ -417,6 +453,9 @@ function register() {
             } else {
                 document.getElementById('register-error').textContent = data.error;
             }
+        })
+        .catch(error => {
+            document.getElementById('register-error').textContent = 'Error en el registro. Intenta de nuevo.';
         });
 }
 
@@ -456,13 +495,13 @@ socket.on('color_assigned', data => {
 });
 
 socket.on('game_start', data => {
-    room = data.room; // Asignar el ID de la sala
-    isBotGame = data.is_bot_game || false; // Indicar si es partida con bot
+    room = data.room;
+    isBotGame = data.is_bot_game || false;
     board = data.board;
     turn = data.turn;
     timeWhite = data.time_white;
     timeBlack = data.time_black;
-    playerColors = data.playerColors || data.players;
+    playerColors = data.playerColors;
     previousBoard = JSON.parse(JSON.stringify(board));
     roomSelection.style.display = 'none';
     chessboard.style.display = 'grid';
@@ -474,7 +513,6 @@ socket.on('game_start', data => {
     renderBoard();
     updateTimers();
     if (timeWhite !== null && timeBlack !== null) startTimer();
-    console.log('Partida iniciada en sala:', room);
 });
 
 socket.on('update_board', data => {
