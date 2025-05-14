@@ -231,18 +231,35 @@ function goBackFromPrivateChat() {
     room = null;
 }
 
-function sendGlobalMessage() {
+// Función para enviar mensajes al chat global
+function sendGlobalChatMessage() {
     if (!username) {
-        alert('Por favor, iniciá sesión primero.');
+        alert('Por favor, iniciá sesión para usar el chat global.');
         return;
     }
     const input = document.getElementById('global-chat-input');
     const message = input.value.trim();
     if (message) {
-        socket.emit('global_message', { message });
+        socket.emit('global_chat_message', { message: message });
         input.value = '';
     }
 }
+
+// Manejar mensajes globales recibidos
+socket.on('new_global_message', data => {
+    const chat = document.getElementById('global-chat-messages');
+    const messageElement = document.createElement('div');
+    messageElement.textContent = `[${data.timestamp}] ${data.username}: ${data.message}`;
+    chat.appendChild(messageElement);
+    chat.scrollTop = chat.scrollHeight; // Auto-scroll al último mensaje
+});
+
+// Manejar errores del chat
+socket.on('error', data => {
+    if (data.message.includes('chat global')) {
+        alert(data.message);
+    }
+});
 
 function sendPrivateMessage() {
     if (!username) {
@@ -551,13 +568,6 @@ socket.on('online_players_update', players => {
     renderOnlinePlayers(players);
 });
 
-socket.on('global_message', data => {
-    const globalChat = document.getElementById('global-chat');
-    const msg = document.createElement('div');
-    msg.textContent = `${data.username}: ${data.message}`;
-    globalChat.appendChild(msg);
-    globalChat.scrollTop = globalChat.scrollHeight;
-});
 
 socket.on('color_assigned', data => {
     myColor = data.color;
@@ -579,7 +589,7 @@ socket.on('game_start', data => {
     gameButtons.style.display = 'block';
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
+    document.querySelector('.contaier').style.display = 'flex';
     initializeChessboard();
     renderBoard();
     updateTimers();
