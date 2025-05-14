@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juego de Ajedrez Nórdico - PeonKing</title>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto&display=swap" rel="stylesheet">
     <style>
         body {
             background-color: #2b1d0e;
@@ -416,7 +415,7 @@
             font-family: 'Roboto', sans-serif;
             margin: 5px;
         }
-        #promotion-modal {
+        #promotion-modal, #bot-config-modal {
             display: none;
             position: fixed;
             top: 0;
@@ -428,7 +427,7 @@
             justify-content: center;
             align-items: center;
         }
-        #promotion-modal-content {
+        #promotion-modal-content, #bot-config-modal-content {
             background: #4a2c1a;
             padding: 20px;
             border: 3px solid #8b5a2b;
@@ -437,7 +436,7 @@
             color: #d4af37;
             font-family: 'Roboto', sans-serif;
         }
-        #promotion-modal-content button {
+        #promotion-modal-content button, #bot-config-modal-content button {
             margin: 10px;
             padding: 10px 20px;
             background: #4a2c1a;
@@ -446,6 +445,16 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+        }
+        #bot-config-modal-content select {
+            width: 80%;
+            margin: 10px auto;
+            padding: 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            font-family: 'Roboto', sans-serif;
         }
         @media (max-width: 700px) {
             .container {
@@ -536,7 +545,7 @@
             #global-chat button, #play-with-bot {
                 padding: 8px 15px;
             }
-            #promotion-modal-content {
+            #promotion-modal-content, #bot-config-modal-content {
                 width: 90%;
                 max-width: 300px;
             }
@@ -590,6 +599,31 @@
             <button onclick="selectPromotion('n')">Caballo</button>
         </div>
     </div>
+    <div id="bot-config-modal">
+        <div id="bot-config-modal-content">
+            <h2>Configurar Partida con Bot</h2>
+            <select id="bot-timer-select">
+                <option value="0">Sin temporizador</option>
+                <option value="1">1 minuto</option>
+                <option value="3">3 minutos</option>
+                <option value="5">5 minutos</option>
+                <option value="10">10 minutos</option>
+                <option value="15">15 minutos</option>
+                <option value="30">30 minutos</option>
+            </select>
+            <select id="bot-difficulty-select">
+                <option value="easy">Fácil</option>
+                <option value="medium" selected>Medio</option>
+                <option value="hard">Difícil</option>
+            </select>
+            <select id="bot-player-color-select">
+                <option value="white">Blancas</option>
+                <option value="black">Negras</option>
+            </select>
+            <button onclick="startBotGame()">Iniciar Partida</button>
+            <button onclick="closeBotConfigModal()">Cancelar</button>
+        </div>
+    </div>
     <div class="container">
         <div class="user-stats">
             <span id="neig-balance">10000 Neig</span><img src="/static/neig.png" alt="Neig">
@@ -608,19 +642,10 @@
                 <option value="15">15 minutos</option>
                 <option value="30">30 minutos</option>
             </select>
-            <select id="difficulty-select">
-                <option value="easy">Fácil</option>
-                <option value="medium" selected>Medio</option>
-                <option value="hard">Difícil</option>
-            </select>
-            <select id="player-color-select">
-                <option value="white">Blancas</option>
-                <option value="black">Negras</option>
-            </select>
             <input type="color" id="color-select" value="#FFFFFF">
             <button onclick="joinRoom()">Jugar</button>
             <button onclick="joinWaitlist()">Esperar Oponente</button>
-            <button id="play-with-bot" onclick="playWithBot()">Jugar con Bot</button>
+            <button id="play-with-bot" onclick="openBotConfigModal()">Jugar con Bot</button>
             <button id="load-button" onclick="loadSavedGames()">Cargar partida</button>
             <div id="saved-games"></div>
         </div>
@@ -659,7 +684,7 @@
         </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://unpkg.com/simple-peer@9.11.1/simple-peer.min.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.0/simple-peer.min.js"></script>
     <script src="/static/game.js"></script>
 </body>
 </html>
