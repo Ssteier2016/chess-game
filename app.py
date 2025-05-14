@@ -15,8 +15,11 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')
 socketio = SocketIO(app, cors_allowed_origins="*")
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
-stockfish_path = "src/stockfish"
-engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+STOCKFISH_PATH = os.path.join(os.path.dirname(__file__), 'src', 'stockfish') if os.getenv('RENDER') else 'src/stockfish'
+
+# Verificar si Stockfish existe
+if not os.path.exists(STOCKFISH_PATH):
+    print(f"Error: No se encontró Stockfish en {STOCKFISH_PATH}")
 
 sessions = {}
 players = {}
@@ -158,6 +161,14 @@ def get_avatar():
     result = c.fetchone()
     conn.close()
     return jsonify({'avatar': result[0] if result else '/static/default-avatar.png'})
+
+@app.route('/test_stockfish')
+def test_stockfish():
+    try:
+        with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
+            return jsonify({'status': 'Stockfish OK'})
+    except Exception as e:
+        return jsonify({'status': 'Error', 'message': str(e)})
 
 @socketio.on('login')
 def on_login(data):
@@ -392,7 +403,11 @@ def on_play_with_bot(data):
     }, room=room)
 
     if player_color == 'black':
-        make_bot_move(room, sid)
+        try:
+            make_bot_move(room, sid)
+        except Exception as e:
+            print(f"Error al iniciar movimiento del bot: {str(e)}")
+            emit('error', {'message': 'Error al iniciar el movimiento del bot'}, to=sid)
 
 def make_bot_move(room, sid):
     if room not in games or not games[room].get('is_bot_game'):
@@ -410,46 +425,51 @@ def make_bot_move(room, sid):
         think_time = 0.1
 
     board = games[room]['chessboard']
-    engine.configure({"Skill Level": skill_level})
-    result = engine.play(board, chess.engine.Limit(time=think_time))
-    move = result.move
-    board.push(move)
-    games[room]['turn'] = 'black' if games[room]['turn'] == 'white' else 'white'
+    try:
+        with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
+            engine.configure({"Skill Level": skill_level})
+            result = engine.play(board, chess.engine.Limit(time=think_time))
+            move = result.move
+            board.push(move)
+            games[room]['turn'] = 'black' if games[room]['turn'] == 'white' else 'white'
 
-    board_state = [['.' for _ in range(8)] for _ in range(8)]
-    for square in chess.SQUARES:
-        piece = board.piece_at(square)
-        if piece:
-            row, col = 7 - (square // 8), square % 8
-            board_state[row][col] = piece.symbol()
+            board_state = [['.' for _ in range(8)] for _ in range(8)]
+            for square in chess.SQUARES:
+                piece = board.piece_at(square)
+                if piece:
+                    row, col = 7 - (square // 8), square % 8
+                    board_state[row][col] = piece.symbol()
 
-    update_timer(room)
-    socketio.emit('update_board', {'board': board_state, 'turn': games[room]['turn']}, room=room)
+            update_timer(room)
+            socketio.emit('update_board', {'board': board_state, 'turn': games[room]['turn']}, room=room)
 
-    if board.is_check():
-        socketio.emit('check', {'message': '¡Jaque!'}, room=room)
-        if board.is_checkmate():
-            winner_username = sessions[sid] if games[room]['turn'] != players[room][sid]['color'] else 'Stockfish'
-            user_data = load_user_data(sessions[sid])
-            elo_points = 50 if difficulty == 'easy' else 100 if difficulty == 'medium' else 150
-            neig_points = 25 if difficulty == 'easy' else 50 if difficulty == 'medium' else 75
-            if winner_username == sessions[sid]:
-                user_data['elo'] += elo_points
-                user_data['neig'] += neig_points
-                user_data['level'] = calculate_level(user_data['elo'])
-                save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
-                emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
-            socketio.emit('game_over', {
-                'message': f'¡Jaque mate! Gana {winner_username}',
-                'elo_points': elo_points if winner_username == sessions[sid] else 0,
-                'neig_points': neig_points if winner_username == sessions[sid] else 0
-            }, room=room)
-            del players[room]
-            del games[room]
-    elif board.is_stalemate() or board.is_insufficient_material() or board.is_seventyfive_moves() or board.is_fivefold_repetition():
-        socketio.emit('game_over', {'message': '¡Partida terminada en tablas!'}, room=room)
-        del players[room]
-        del games[room]
+            if board.is_check():
+                socketio.emit('check', {'message': '¡Jaque!'}, room=room)
+                if board.is_checkmate():
+                    winner_username = sessions[sid] if games[room]['turn'] != players[room][sid]['color'] else 'Stockfish'
+                    user_data = load_user_data(sessions[sid])
+                    elo_points = 50 if difficulty == 'easy' else 100 if difficulty == 'medium' else 150
+                    neig_points = 25 if difficulty == 'easy' else 50 if difficulty == 'medium' else 75
+                    if winner_username == sessions[sid]:
+                        user_data['elo'] += elo_points
+                        user_data['neig'] += neig_points
+                        user_data['level'] = calculate_level(user_data['elo'])
+                        save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
+                        emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
+                    socketio.emit('game_over', {
+                        'message': f'¡Jaque mate! Gana {winner_username}',
+                        'elo_points': elo_points if winner_username == sessions[sid] else 0,
+                        'neig_points': neig_points if winner_username == sessions[sid] else 0
+                    }, room=room)
+                    del players[room]
+                    del games[room]
+                elif board.is_stalemate() or board.is_insufficient_material() or board.is_seventyfive_moves() or board.is_fivefold_repetition():
+                    socketio.emit('game_over', {'message': '¡Partida terminada en tablas!'}, room=room)
+                    del players[room]
+                    del games[room]
+    except Exception as e:
+        print(f"Error al ejecutar Stockfish en la sala {room}: {str(e)}")
+        socketio.emit('error', {'message': f'Error al generar el movimiento del bot: {str(e)}'}, room=room)
 
 @socketio.on('move')
 def on_move(data):
@@ -521,7 +541,11 @@ def on_move(data):
                 return
         
         if game.get('is_bot_game') and game['turn'] != players[room][sid]['color']:
-            make_bot_move(room, sid)
+            try:
+                make_bot_move(room, sid)
+            except Exception as e:
+                print(f"Error al procesar movimiento del bot tras jugada del usuario: {str(e)}")
+                emit('error', {'message': 'Error al procesar el movimiento del bot'}, room=room)
     else:
         emit('error', {'message': 'Movimiento ilegal'}, room=room)
 
