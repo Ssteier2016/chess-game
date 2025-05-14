@@ -10,6 +10,7 @@ import time
 import chess
 import chess.engine
 import uuid
+import random
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')
@@ -20,6 +21,36 @@ STOCKFISH_PATH = os.path.join(os.path.dirname(__file__), 'src', 'stockfish') if 
 # Verificar si Stockfish existe
 if not os.path.exists(STOCKFISH_PATH):
     print(f"Error: No se encontró Stockfish en {STOCKFISH_PATH}")
+
+# Mensajes del bot para el chat
+BOT_MESSAGES = {
+    'start': [
+        "¡Vamos a jugar! ¿Preparado para un desafío?",
+        "Soy Stockfish, tu oponente. ¡Hagamos una gran partida!",
+        "¡Empecemos! Espero que traigas tu mejor estrategia."
+    ],
+    'move': [
+        "Buen movimiento, pero veamos cómo respondes a esto.",
+        "Interesante jugada. Aquí va la mía.",
+        "¡No está mal! Mi turno.",
+        "¿Eso es todo? Aquí tienes mi respuesta."
+    ],
+    'check': [
+        "¡Jaque! ¿Cómo vas a salir de esta?",
+        "Estás en jaque. Piensa con cuidado.",
+        "¡Jaque! Vamos, sorpréndeme."
+    ],
+    'checkmate': [
+        "¡Jaque mate! ¡Gran partida!",
+        "¡Jaque mate! Lo diste todo, ¿eh?",
+        "¡Jaque mate! Hasta la próxima."
+    ],
+    'stalemate': [
+        "Tablas, ¡qué partida tan equilibrada!",
+        "¡Empate! Nadie se rindió hoy.",
+        "Tablas, ¡bien jugado!"
+    ]
+}
 
 sessions = {}
 players = {}
@@ -317,7 +348,8 @@ def on_join(data):
             'turn': games[room]['turn'],
             'time_white': games[room]['time_white'],
             'time_black': games[room]['time_black'],
-            'playerColors': player_colors
+            'playerColors': player_colors,
+            'room': room
         }, room=room)
     else:
         emit('waiting_opponent', {'message': 'Esperando a otro jugador...'}, to=sid)
@@ -358,7 +390,7 @@ def on_watch_game(data):
             'turn': games[room]['turn'],
             'time_white': games[room]['time_white'],
             'time_black': games[room]['time_black'],
-            'playerColors': {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
+            'playerColors': {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room] if sid in players[room]}
         }, to=sid)
 
 @socketio.on('play_with_bot')
@@ -417,6 +449,9 @@ def on_play_with_bot(data):
         'is_bot_game': True
     }, room=room)
 
+    # Enviar mensaje inicial del bot
+    socketio.emit('bot_chat_message', {'message': random.choice(BOT_MESSAGES['start'])}, room=room)
+
     if player_color == 'black':
         try:
             make_bot_move(room, sid)
@@ -457,6 +492,16 @@ def make_bot_move(room, sid):
 
             update_timer(room)
             socketio.emit('update_board', {'board': board_state, 'turn': games[room]['turn']}, room=room)
+
+            # Enviar mensaje del bot después del movimiento
+            if board.is_checkmate():
+                socketio.emit('bot_chat_message', {'message': random.choice(BOT_MESSAGES['checkmate'])}, room=room)
+            elif board.is_check():
+                socketio.emit('bot_chat_message', {'message': random.choice(BOT_MESSAGES['check'])}, room=room)
+            elif board.is_stalemate() or board.is_insufficient_material() or board.is_seventyfive_moves() or board.is_fivefold_repetition():
+                socketio.emit('bot_chat_message', {'message': random.choice(BOT_MESSAGES['stalemate'])}, room=room)
+            else:
+                socketio.emit('bot_chat_message', {'message': random.choice(BOT_MESSAGES['move'])}, room=room)
 
             if board.is_check():
                 socketio.emit('check', {'message': '¡Jaque!'}, room=room)
@@ -806,7 +851,8 @@ def on_accept_conditions(data):
             'turn': 'white',
             'time_white': None,
             'time_black': None,
-            'playerColors': player_colors
+            'playerColors': player_colors,
+            'room': room
         }, room=room)
 
 @socketio.on('leave_private_chat')
