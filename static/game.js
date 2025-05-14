@@ -29,129 +29,68 @@ const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
 const promotionModal = document.getElementById('promotion-modal');
 
-function joinRoom() {
-    room = document.getElementById('room-id').value.trim();
-    const timer = document.getElementById('timer-select').value;
-    const color = document.getElementById('color-select').value;
-
-    if (!room) {
-        console.log('Error: ID de sala vacío');
-        alert('Por favor, ingresá un ID de sala.');
-        return;
-    }
-
-    socket.emit('join', { room, timer, color });
-}
-
-function playWithBot() {
-    if (!username) {
-        console.error('No hay usuario logueado');
-        alert('Por favor, iniciá sesión primero.');
-        return;
-    }
-    const timer = document.getElementById('timer-select').value;
-    const color = document.getElementById('color-select').value;
-    const difficulty = document.getElementById('difficulty-select').value;
-    const player_color = document.getElementById('player-color-select').value;
-    socket.emit('play_with_bot', { timer, color, difficulty, player_color });
-}
-
-function watchGame(room) {
-    socket.emit('watch_game', { room });
-}
-
-function renderOnlinePlayers(players) {
-    const onlineDiv = document.getElementById('online-players');
-    onlineDiv.innerHTML = '<h3>Jugadores en Línea</h3>';
-    players.forEach(player => {
-        const p = document.createElement('p');
-        const img = document.createElement('img');
-        img.src = player.avatar || '/static/default-avatar.png';
-        img.style.width = '20px';
-        img.style.height = '20px';
-        img.style.marginRight = '5px';
-        img.onerror = () => img.src = '/static/default-avatar.png';
-        p.appendChild(img);
-        p.appendChild(document.createTextNode(player.username));
-        onlineDiv.appendChild(p);
-    });
-}
-
-function sendGlobalMessage() {
-    const input = document.getElementById('global-chat-input');
-    const message = input.value.trim();
-    if (message) {
-        socket.emit('global_message', { message });
-        input.value = '';
-    }
-}
-
-function joinWaitlist() {
-    if (!username) {
-        console.error('No hay usuario logueado');
-        alert('Por favor, iniciá sesión primero.');
-        return;
-    }
-    const color = document.getElementById('color-select').value;
-    socket.emit('join_waitlist', { color, avatar: currentAvatar });
-    document.getElementById('room-selection').style.display = 'none';
-    document.getElementById('waitlist').style.display = 'block';
-    document.querySelector('.container').style.display = 'none';
-}
-
-function goBackFromWaitlist() {
-    socket.emit('leave_waitlist');
-    document.getElementById('waitlist').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    document.getElementById('room-selection').style.display = 'block';
-}
-
-function goBackFromPrivateChat() {
-    socket.emit('leave_private_chat', { room });
-    document.getElementById('private-chat').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    document.getElementById('room-selection').style.display = 'block';
-    room = null;
-}
-
-function renderBoard() {
+function initializeChessboard() {
     chessboard.innerHTML = '';
-    const pieceSymbols = {
-        'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
-        'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
-    };
-    for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
+    for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
             const square = document.createElement('div');
-            square.className = 'square ' + ((row + col) % 2 === 0 ? 'white' : 'black');
-            square.dataset.row = row;
-            square.dataset.col = col;
-            const piece = board[row][col];
-            square.textContent = piece === '.' ? '' : (pieceSymbols[piece] || piece);
-            if (piece !== '.') square.style.color = isWhite(piece) ? playerColors['white'] : playerColors['black'];
+            square.className = `square ${(i + j) % 2 === 0 ? 'white' : 'black'}`;
+            square.dataset.row = i;
+            square.dataset.col = j;
             square.addEventListener('click', handleSquareClick);
+            square.addEventListener('touchstart', handleTouchStart, { passive: true });
+            square.addEventListener('touchend', handleTouchEnd, { passive: true });
             chessboard.appendChild(square);
         }
     }
 }
 
+function renderBoard() {
+    if (!board) return;
+    const pieceSymbols = {
+        'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
+        'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
+    };
+    const squares = document.querySelectorAll('.square');
+    squares.forEach(square => {
+        const row = parseInt(square.dataset.row);
+        const col = parseInt(square.dataset.col);
+        const piece = board[row][col] === '.' ? null : board[row][col];
+        square.textContent = piece ? pieceSymbols[piece] || piece : '';
+        square.classList.remove('selected');
+        if (piece && piece !== '.') {
+            square.style.color = isWhite(piece) ? playerColors['white'] || '#FFFFFF' : playerColors['black'] || '#000000';
+        }
+    });
+    if (selectedSquare) {
+        selectedSquare.classList.add('selected');
+    }
+}
+
+function isWhite(piece) {
+    return piece === piece.toUpperCase();
+}
+
 function handleSquareClick(event) {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    if (!room && !isBotGame) {
+        alert('No estás en una sala.');
+        return;
+    }
+    if (myColor !== turn) {
+        alert('No es tu turno.');
+        return;
+    }
     const square = event.target.closest('.square');
     if (!square) return;
     const row = parseInt(square.dataset.row);
     const col = parseInt(square.dataset.col);
-    if (!room && !isBotGame) {
-        console.log('Error: No estás en una sala');
-        alert('No estás en una sala');
-        return;
-    }
-    if (myColor !== turn) {
-        console.log(`No es tu turno. Turno actual: ${turn}, Tu color: ${myColor}`);
-        alert('No es tu turno');
-        return;
-    }
     const piece = board[row][col];
     const position = String.fromCharCode(97 + col) + (8 - row);
+
     if (!selectedSquare) {
         if (piece !== '.' && ((myColor === 'white' && isWhite(piece)) || (myColor === 'black' && !isWhite(piece)))) {
             selectedSquare = square;
@@ -162,36 +101,171 @@ function handleSquareClick(event) {
         const fromCol = parseInt(selectedSquare.dataset.col);
         const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
         const to = position;
-        
-        let promotion = null;
+        const piece = board[fromRow][fromCol];
         if (piece.toLowerCase() === 'p' && ((myColor === 'white' && row === 0) || (myColor === 'black' && row === 7))) {
             document.getElementById('promotion-modal').style.display = 'flex';
             return new Promise(resolve => {
                 window.selectPromotion = function(piece) {
-                    promotion = piece;
                     document.getElementById('promotion-modal').style.display = 'none';
-                    socket.emit('move', { from, to, room, promotion });
+                    socket.emit('move', { from, to, room, promotion: piece });
                     resolve();
                 };
             });
         } else {
-            socket.emit('move', { from, to, room, promotion });
+            socket.emit('move', { from, to, room, promotion: null });
         }
         selectedSquare.classList.remove('selected');
         selectedSquare = null;
     }
 }
 
-function isWhite(piece) {
-    return piece === piece.toUpperCase();
+function handleTouchStart(event) {
+    if (!username || (myColor !== turn) || (!room && !isBotGame)) return;
+    const square = event.target.closest('.square');
+    if (!square) return;
+    selectedSquare = square;
+    square.classList.add('selected');
+}
+
+function handleTouchEnd(event) {
+    if (!selectedSquare) return;
+    const touchEndPos = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
+    const square = document.elementFromPoint(touchEndPos.x, touchEndPos.y);
+    if (square && square.classList.contains('square') && square !== selectedSquare) {
+        const fromRow = parseInt(selectedSquare.dataset.row);
+        const fromCol = parseInt(selectedSquare.dataset.col);
+        const toRow = parseInt(square.dataset.row);
+        const toCol = parseInt(square.dataset.col);
+        const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
+        const to = String.fromCharCode(97 + toCol) + (8 - toRow);
+        const piece = board[fromRow][fromCol];
+        if (piece.toLowerCase() === 'p' && ((myColor === 'white' && toRow === 0) || (myColor === 'black' && toRow === 7))) {
+            document.getElementById('promotion-modal').style.display = 'flex';
+            return new Promise(resolve => {
+                window.selectPromotion = function(piece) {
+                    document.getElementById('promotion-modal').style.display = 'none';
+                    socket.emit('move', { from, to, room, promotion: piece });
+                    resolve();
+                };
+            });
+        } else {
+            socket.emit('move', { from, to, room, promotion: null });
+        }
+    }
+    selectedSquare.classList.remove('selected');
+    selectedSquare = null;
+}
+
+function openBotConfigModal() {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    document.getElementById('bot-config-modal').style.display = 'flex';
+}
+
+function closeBotConfigModal() {
+    document.getElementById('bot-config-modal').style.display = 'none';
+}
+
+function startBotGame() {
+    const timer = document.getElementById('bot-timer-select').value;
+    const difficulty = document.getElementById('bot-difficulty-select').value;
+    const player_color = document.getElementById('bot-player-color-select').value;
+    socket.emit('play_with_bot', { timer, difficulty, player_color, color: '#FFFFFF' });
+    closeBotConfigModal();
+    roomSelection.style.display = 'none';
+    chessboard.style.display = 'grid';
+    gameButtons.style.display = 'block';
+    timers.style.display = 'block';
+    isBotGame = true;
+}
+
+function joinRoom() {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    room = document.getElementById('room-id').value.trim();
+    const timer = document.getElementById('timer-select').value;
+    const color = document.getElementById('color-select').value;
+    if (!room) {
+        alert('Por favor, ingresá un ID de sala.');
+        return;
+    }
+    socket.emit('join', { room, timer, color });
+}
+
+function playWithBot() {
+    openBotConfigModal();
+}
+
+function watchGame(roomId) {
+    socket.emit('watch_game', { room: roomId });
+}
+
+function joinWaitlist() {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    const color = document.getElementById('color-select').value;
+    socket.emit('join_waitlist', { color, avatar: currentAvatar });
+    roomSelection.style.display = 'none';
+    document.getElementById('waitlist').style.display = 'block';
+    document.querySelector('.container').style.display = 'none';
+}
+
+function goBackFromWaitlist() {
+    socket.emit('leave_waitlist');
+    document.getElementById('waitlist').style.display = 'none';
+    document.querySelector('.container').style.display = 'flex';
+    roomSelection.style.display = 'block';
+}
+
+function goBackFromPrivateChat() {
+    socket.emit('leave_private_chat', { room });
+    document.getElementById('private-chat').style.display = 'none';
+    document.querySelector('.container').style.display = 'flex';
+    roomSelection.style.display = 'block';
+    room = null;
+}
+
+function sendGlobalMessage() {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    const input = document.getElementById('global-chat-input');
+    const message = input.value.trim();
+    if (message) {
+        socket.emit('global_message', { message });
+        input.value = '';
+    }
+}
+
+function sendPrivateMessage() {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
+    const input = document.getElementById('private-chat-input');
+    const message = input.value.trim();
+    if (message && room) {
+        socket.emit('private_message', { room, message });
+        input.value = '';
+    }
+}
+
+function acceptConditions() {
+    socket.emit('accept_conditions', { room });
 }
 
 function formatTime(seconds) {
-    if (seconds === null || isNaN(seconds) || seconds < 0) return '--:--.--';
+    if (seconds === null || isNaN(seconds) || seconds < 0) return '--:--';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    const millis = Math.floor((seconds % 1) * 100);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${millis.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
 function updateTimers() {
@@ -221,27 +295,11 @@ function stopTimer() {
     }
 }
 
-function goBack() {
-    socket.emit('leave', { room });
-    roomSelection.style.display = 'block';
-    document.querySelector('.container').style.display = 'flex';
-    chessboard.style.display = 'none';
-    chat.style.display = 'none';
-    gameButtons.style.display = 'none';
-    timers.style.display = 'none';
-    savedGamesDiv.style.display = 'none';
-    stopTimer();
-    room = null;
-    board = null;
-    turn = null;
-    selectedSquare = null;
-    timeWhite = null;
-    timeBlack = null;
-    myColor = null;
-    updateTimers();
-}
-
 function sendMessage() {
+    if (!username) {
+        alert('Por favor, iniciá sesión primero.');
+        return;
+    }
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
     if (message && room) {
@@ -329,7 +387,10 @@ function updateUserData(data) {
 }
 
 function saveGame() {
-    if (!username) return alert('Debes iniciar sesión para guardar una partida');
+    if (!username) {
+        alert('Debes iniciar sesión para guardar una partida');
+        return;
+    }
     const gameName = prompt('Ingresá un nombre para la partida:');
     if (gameName && room) {
         socket.emit('save_game', { room, game_name: gameName, board, turn });
@@ -343,31 +404,47 @@ function resignGame() {
 }
 
 function loadSavedGames() {
-    if (!username) return alert('Debes iniciar sesión para cargar una partida');
+    if (!username) {
+        alert('Debes iniciar sesión para cargar una partida');
+        return;
+    }
     socket.emit('get_saved_games', { username });
     savedGamesDiv.style.display = 'block';
 }
 
 function loadGame(gameName) {
-    if (!username) return alert('Debes iniciar sesión para cargar una partida');
+    if (!username) {
+        alert('Debes iniciar sesión para cargar una partida');
+        return;
+    }
     socket.emit('load_game', { username, game_name: gameName });
+}
+
+function goBack() {
+    if (room) {
+        socket.emit('leave', { room });
+    }
+    roomSelection.style.display = 'block';
+    document.querySelector('.container').style.display = 'flex';
+    chessboard.style.display = 'none';
+    chat.style.display = 'none';
+    gameButtons.style.display = 'none';
+    timers.style.display = 'none';
+    savedGamesDiv.style.display = 'none';
+    stopTimer();
+    room = null;
+    board = null;
+    turn = null;
+    selectedSquare = null;
+    timeWhite = null;
+    timeBlack = null;
+    myColor = null;
+    isBotGame = false;
+    updateTimers();
 }
 
 function selectOpponent(opponentSid) {
     socket.emit('select_opponent', { opponent_sid: opponentSid });
-}
-
-function sendPrivateMessage() {
-    const input = document.getElementById('private-chat-input');
-    const message = input.value.trim();
-    if (message && room) {
-        socket.emit('private_message', { room, message });
-        input.value = '';
-    }
-}
-
-function acceptConditions() {
-    socket.emit('accept_conditions', { room });
 }
 
 function login(usernameInput, password) {
@@ -384,7 +461,7 @@ function logout() {
     level = 0;
     document.getElementById('login-register').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
-    document.getElementById('room-selection').style.display = 'none';
+    roomSelection.style.display = 'none';
     document.getElementById('waitlist').style.display = 'none';
     document.getElementById('private-chat').style.display = 'none';
     document.getElementById('neig-balance').textContent = '10000 Neig';
@@ -394,48 +471,6 @@ function logout() {
     socket.disconnect();
     socket.connect();
 }
-
-function handleTouchStart(event) {
-    const square = event.target.closest('.square');
-    if (!square) return;
-    selectedSquare = square;
-    square.classList.add('selected');
-}
-
-function handleTouchEnd(event) {
-    if (!selectedSquare) return;
-    const touchEndPos = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
-    const square = document.elementFromPoint(touchEndPos.x, touchEndPos.y);
-    if (square && square.classList.contains('square') && square !== selectedSquare) {
-        const fromRow = parseInt(selectedSquare.dataset.row);
-        const fromCol = parseInt(selectedSquare.dataset.col);
-        const toRow = parseInt(square.dataset.row);
-        const toCol = parseInt(square.dataset.col);
-        const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
-        const to = String.fromCharCode(97 + toCol) + (8 - toRow);
-        
-        let promotion = null;
-        const piece = board[fromRow][fromCol];
-        if (piece.toLowerCase() === 'p' && ((myColor === 'white' && toRow === 0) || (myColor === 'black' && toRow === 7))) {
-            document.getElementById('promotion-modal').style.display = 'flex';
-            return new Promise(resolve => {
-                window.selectPromotion = function(piece) {
-                    promotion = piece;
-                    document.getElementById('promotion-modal').style.display = 'none';
-                    socket.emit('move', { from, to, room, promotion });
-                    resolve();
-                };
-            });
-        } else {
-            socket.emit('move', { from, to, room, promotion });
-        }
-    }
-    selectedSquare.classList.remove('selected');
-    selectedSquare = null;
-}
-
-chessboard.addEventListener('touchstart', handleTouchStart, { passive: true });
-chessboard.addEventListener('touchend', handleTouchEnd, { passive: true });
 
 function register() {
     const formData = new FormData(document.getElementById('register-form'));
@@ -447,7 +482,7 @@ function register() {
                 currentAvatar = data.avatar;
                 document.getElementById('login-register').style.display = 'none';
                 document.querySelector('.container').style.display = 'flex';
-                document.getElementById('room-selection').style.display = 'block';
+                roomSelection.style.display = 'block';
                 socket.emit('join_user_room', { username });
                 socket.emit('get_user_data', { username });
             } else {
@@ -470,11 +505,46 @@ function previewAvatar(event) {
     }
 }
 
+function renderOnlinePlayers(players) {
+    const onlineDiv = document.getElementById('online-players');
+    onlineDiv.innerHTML = '<h3>Jugadores en Línea</h3>';
+    players.forEach(player => {
+        const p = document.createElement('p');
+        const img = document.createElement('img');
+        img.src = player.avatar || '/static/default-avatar.png';
+        img.style.width = '20px';
+        img.style.height = '20px';
+        img.style.marginRight = '5px';
+        img.onerror = () => img.src = '/static/default-avatar.png';
+        p.appendChild(img);
+        p.appendChild(document.createTextNode(player.username));
+        onlineDiv.appendChild(p);
+    });
+}
+
 socket.on('connect', () => {
+    console.log('Conectado al servidor');
     if (username) {
         socket.emit('join_user_room', { username });
         socket.emit('get_user_data', { username });
     }
+});
+
+socket.on('login_success', data => {
+    username = data.username;
+    currentAvatar = data.avatar;
+    neigBalance = data.neig;
+    eloPoints = data.elo;
+    level = data.level;
+    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
+    document.getElementById('login-register').style.display = 'none';
+    document.querySelector('.container').style.display = 'flex';
+    roomSelection.style.display = 'block';
+    socket.emit('join_user_room', { username });
+});
+
+socket.on('login_error', data => {
+    document.getElementById('login-error').textContent = data.error || data.message;
 });
 
 socket.on('online_players_update', players => {
@@ -510,6 +580,7 @@ socket.on('game_start', data => {
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
+    initializeChessboard();
     renderBoard();
     updateTimers();
     if (timeWhite !== null && timeBlack !== null) startTimer();
@@ -622,6 +693,7 @@ socket.on('game_loaded', data => {
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
+    initializeChessboard();
     renderBoard();
     updateTimers();
     alert(`Partida "${data.game_name}" cargada exitosamente en la sala ${room}`);
@@ -673,23 +745,6 @@ socket.on('private_message', data => {
     messages.scrollTop = messages.scrollHeight;
 });
 
-socket.on('login_success', data => {
-    username = data.username;
-    currentAvatar = data.avatar;
-    neigBalance = data.neig;
-    eloPoints = data.elo;
-    level = data.level;
-    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
-    document.getElementById('login-register').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    document.getElementById('room-selection').style.display = 'block';
-    socket.emit('join_user_room', { username });
-});
-
-socket.on('login_error', data => {
-    document.getElementById('login-error').textContent = data.error;
-});
-
 document.getElementById('login-form')?.addEventListener('submit', e => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -704,6 +759,7 @@ document.getElementById('register-form')?.addEventListener('submit', e => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeChessboard();
     if (username) socket.emit('get_user_data', { username });
 });
 
