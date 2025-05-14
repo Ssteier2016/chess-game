@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Juego de Ajedrez Nórdico - PeonKing</title>
+    <title>Peón KinGame</title>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
     <style>
         body {
             background-color: #2b1d0e;
@@ -21,73 +21,27 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #2b1d0e url('https://www.transparenttextures.com/patterns/parchment.png');
+            background: #2b1d0e url('/static/parchment.png');
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1000;
         }
-        #logo {
-            font-family: 'Roboto', sans-serif;
-            font-size: 60px;
-            color: #d4af37;
-            text-shadow: 3px 3px 6px #000, -2px -2px 4px #8b5a2b;
-            border: 4px solid #4a2c1a;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 10px;
+        #loading-screen img {
+            width: 100px;
+            height: 100px;
             margin-bottom: 20px;
         }
-        #loading-bar-container {
-            width: 300px;
-            height: 20px;
-            background: #4a2c1a;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        #loading-bar {
-            width: 0;
-            height: 100%;
-            background: #d4af37;
-            animation: load 3s ease-in-out forwards;
-        }
-        @keyframes load {
-            0% { width: 0; }
-            100% { width: 100%; }
-        }
-        #login-register {
-            max-width: 400px;
-            margin: 20px auto;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 5px solid #8b5a2b;
-            border-radius: 10px;
-            text-align: center;
-        }
-        #login-register form {
-            margin-bottom: 20px;
-        }
-        #login-register input, #login-register button {
-            display: block;
-            width: 80%;
-            margin: 10px auto;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            font-family: 'Roboto', sans-serif;
-        }
-        #login-register p {
-            margin: 10px 0;
+        #loading-screen p {
+            font-size: 1.5em;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
         }
         .container {
             max-width: 1000px;
             margin: 20px auto;
             padding: 20px;
-            background: #2b1d0e url('https://www.transparenttextures.com/patterns/parchment.png');
+            background: #2b1d0e url('/static/parchment.png');
             border: 5px solid #8b5a2b;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
             display: none;
@@ -95,28 +49,364 @@
             align-items: center;
             position: relative;
         }
-        .user-stats {
+        #login-register {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .auth-container {
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            text-align: center;
+            width: 300px;
+        }
+        .auth-container input, .auth-container button {
+            margin: 10px 0;
+            padding: 8px;
+            width: 80%;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        .auth-container button {
+            cursor: pointer;
+            width: auto;
+            padding: 8px 20px;
+        }
+        .auth-container img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 10px 0;
+        }
+        #avatar-preview {
+            display: block;
+            margin: 10px auto;
+        }
+        #chessboard {
+            display: none;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            width: 480px;
+            height: 480px;
+            border: 5px solid #8b5a2b;
+            background: #4a2c1a;
+            margin: 20px auto;
+        }
+        .square {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em;
+            cursor: pointer;
+        }
+        .white {
+            background: #f5f5dc;
+        }
+        .black {
+            background: #8b5a2b;
+        }
+        .selected {
+            background: #d4af37 !important;
+        }
+        #chat {
+            display: none;
+            width: 300px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+            margin: 10px 0;
+        }
+        #chat-messages {
+            height: 200px;
+            overflow-y: scroll;
+            border: 1px solid #8b5a2b;
+            background: #f5f5dc;
+            color: #000;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #chat-input {
+            width: 70%;
+            padding: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #chat button {
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #game-buttons {
+            display: none;
+            margin: 10px 0;
+        }
+        #game-buttons button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+        }
+        #saved-games {
+            display: none;
+            margin: 10px 0;
+        }
+        #saved-games button {
+            display: block;
+            margin: 5px 0;
+            padding: 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+        }
+        #timers {
+            display: none;
+            margin: 10px 0;
+            font-size: 1.2em;
+        }
+        #promotion-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #4a2c1a;
+            border: 5px solid #8b5a2b;
+            padding: 20px;
+            z-index: 1000;
+        }
+        #promotion-modal button {
+            padding: 10px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.5em;
+        }
+        #bot-config-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #4a2c1a;
+            border: 5px solid #8b5a2b;
+            padding: 20px;
+            z-index: 1000;
+            color: #d4af37;
+            text-align: center;
+        }
+        #bot-config-modal select {
+            padding: 5px;
+            margin: 10px 0;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #bot-config-modal button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #room-selection {
+            display: none;
+            margin: 20px 0;
+            text-align: center;
+        }
+        #room-selection input, #room-selection select {
+            padding: 5px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #room-selection button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #online-players {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+        }
+        #online-players img {
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+        #global-chat-container {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+        }
+        #global-chat-messages {
+            height: 200px;
+            overflow-y: scroll;
+            border: 1px solid #8b5a2b;
+            background: #f5f5dc;
+            color: #000;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #global-chat-input {
+            width: 70%;
+            padding: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #global-chat-container button {
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #waitlist {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            z-index: 1000;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #waitlist-players {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+        }
+        .player-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: #5a3a2a;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .player-item img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            border-radius: 50%;
+        }
+        #private-chat {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            z-index: 1000;
+            padding: 20px;
+        }
+        #private-chat-messages {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            color: #d4af37;
+        }
+        #private-chat-input {
+            width: 70%;
+            padding: 5px;
+            margin: 10px auto;
+            display: block;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #private-chat button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #local-video, #remote-video {
+            display: none;
+            width: 200px;
+            height: 150px;
+            border: 2px solid #8b5a2b;
+            margin: 10px;
+        }
+        #user-info {
             position: absolute;
             top: 10px;
             right: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            font-family: 'Roboto', sans-serif;
-            font-size: 16px;
-            color: #d4af37;
-            background: rgba(0, 0, 0, 0.7);
+            background: #4a2c1a;
             padding: 10px;
             border: 2px solid #8b5a2b;
             border-radius: 5px;
         }
-        .user-stats img {
-            width: 20px;
-            height: 20px;
-            margin-left: 5px;
-            vertical-align: middle;
-        }
-        .user-stats button {
+        #user-info button {
             margin-top: 5px;
             padding: 5px 10px;
             background: #4a2c1a;
@@ -124,567 +414,138 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-            font-size: 14px;
         }
-        .game-area {
-            display: flex;
-            flex-direction: row;
-            justify-content: center;
-            align-items: flex-start;
-            width: 100%;
-            max-width: 900px;
-            margin-top: 20px;
-            gap: 10px;
-        }
-        .chessboard {
-            width: 400px;
-            height: 400px;
-            border: 3px solid #4a2c1a;
-            background: #3c2f2f;
-            font-family: 'Roboto', sans-serif;
-            display: none;
-            grid-template-columns: repeat(8, 1fr);
-            grid-template-rows: repeat(8, 1fr);
-        }
-        .square {
-            width: 100%;
-            height: 100%;
-            font-size: 30px;
-            text-align: center;
-            line-height: 50px;
-            cursor: pointer;
-            color: #000;
-            box-sizing: border-box;
-        }
-        .square.selected {
-            background-color: rgba(255, 255, 0, 0.5);
-        }
-        .white { background-color: #e6d7a3; }
-        .black { background-color: #8b5a2b; }
-        #room-selection {
-            padding: 20px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 10px;
-        }
-        #chat {
-            width: 300px;
-            height: 400px;
-            display: none;
-            background: #f5f5dc;
-            border: 3px solid #4a2c1a;
-            padding: 10px;
-            box-shadow: inset 0 0 10px #000;
-        }
-        #chat-messages {
-            height: 300px;
-            overflow-y: auto;
-            color: #000;
-            font-family: 'Roboto', sans-serif;
-            font-size: 16px;
-        }
-        #chat-input {
-            width: 220px;
-            padding: 5px;
-            background: #e6d7a3;
-            border: 2px solid #8b5a2b;
-            color: #000;
-            font-family: 'Roboto', sans-serif;
-        }
-        #chat-send, #record-audio, #stop-audio, #start-video, #stop-video {
-            padding: 5px 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            cursor: pointer;
-            margin: 5px 0;
-        }
-        #game-buttons {
-            display: none;
-            text-align: center;
-            padding-top: 20px;
-        }
-        #back-button, #save-button, #resign-button {
-            display: inline-block;
-            width: 150px;
-            margin: 5px;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-        }
-        #load-button {
-            display: block;
-            width: 200px;
-            margin: 10px auto;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-        }
-        #saved-games {
-            margin-top: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            display: none;
-        }
-        #saved-games button {
-            width: 100%;
-            margin: 5px 0;
-            padding: 8px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-            text-align: left;
-        }
-        #timers {
-            font-family: 'Roboto', sans-serif;
-            font-size: 16px;
-            color: #d4af37;
-            text-align: center;
-            display: none;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 5px;
-            margin-bottom: 10px;
-        }
-        input, select, button {
-            padding: 10px;
-            font-size: 16px;
-            margin: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-        }
-        h2 { text-shadow: 2px 2px 4px #000; }
-        #video-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 10px;
-        }
-        #local-video, #remote-video {
-            width: 200px;
-            height: 150px;
-            border: 1px solid #4a2c1a;
-            margin: 5px 0;
-            display: none;
-        }
-        #waitlist {
-            padding: 20px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.7);
-            border: 3px solid #8b5a2b;
-            border-radius: 10px;
-            display: none;
-        }
-        #waitlist button {
-            width: 80%;
-            margin: 10px auto;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-        }
-        #waitlist-players {
-            max-height: 300px;
-            overflow-y: auto;
-            margin-bottom: 10px;
-        }
-        .player-item {
-            display: flex;
-            align-items: center;
-            width: 80%;
-            margin: 10px auto;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .player-item img {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            margin-right: 10px;
-            border: 2px solid #d4af37;
-        }
-        #private-chat {
-            max-width: 400px;
-            margin: 20px auto;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 3px solid #8b5a2b;
-            border-radius: 10px;
-            display: none;
-            text-align: center;
-        }
-        #private-chat-messages {
-            height: 200px;
-            overflow-y: auto;
-            background: #f5f5dc;
-            color: #000;
-            padding: 10px;
-            border: 2px solid #4a2c1a;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            font-family: 'Roboto', sans-serif;
-        }
-        #private-chat input, #private-chat button {
-            width: 80%;
-            margin: 5px auto;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            font-family: 'Roboto', sans-serif;
-        }
-        #avatar-preview {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            display: block;
-            margin: 10px auto;
-        }
-        #online-players {
-            margin-top: 20px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 3px solid #8b5a2b;
-            border-radius: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            text-align: left;
-            font-family: 'Roboto', sans-serif;
-        }
-        #online-players h3 {
-            margin: 0 0 10px 0;
-            text-shadow: 2px 2px 4px #000;
-        }
-        #online-players p {
-            margin: 5px 0;
-            color: #d4af37;
-        }
-        #global-chat {
-            margin-top: 20px;
-            padding: 10px;
-            background: #f5f5dc;
-            border: 3px solid #4a2c1a;
-            border-radius: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            color: #000;
-            font-family: 'Roboto', sans-serif;
-        }
-        #global-chat-input {
-            width: 70%;
-            padding: 10px;
-            margin: 10px 0;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            font-family: 'Roboto', sans-serif;
-        }
-        #global-chat button, #play-with-bot {
-            padding: 10px 20px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: 'Roboto', sans-serif;
-            margin: 5px;
-        }
-        #promotion-modal, #bot-config-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        #promotion-modal-content, #bot-config-modal-content {
-            background: #4a2c1a;
-            padding: 20px;
-            border: 3px solid #8b5a2b;
-            border-radius: 10px;
-            text-align: center;
-            color: #d4af37;
-            font-family: 'Roboto', sans-serif;
-        }
-        #promotion-modal-content button, #bot-config-modal-content button {
-            margin: 10px;
-            padding: 10px 20px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        #bot-config-modal-content select {
-            width: 80%;
-            margin: 10px auto;
-            padding: 10px;
-            background: #4a2c1a;
-            color: #d4af37;
-            border: 2px solid #8b5a2b;
-            border-radius: 5px;
-            font-family: 'Roboto', sans-serif;
-        }
-        @media (max-width: 700px) {
-            .container {
-                width: 100%;
-                padding: 10px;
-            }
-            .user-stats {
-                font-size: 14px;
-                padding: 5px;
-            }
-            .user-stats img {
-                width: 16px;
-                height: 16px;
-            }
-            .user-stats button {
-                font-size: 12px;
-                padding: 4px 8px;
-            }
-            .game-area {
-                flex-direction: column;
-                align-items: center;
-            }
-            .chessboard {
-                width: 100%;
-                max-width: 400px;
-                height: auto;
-                aspect-ratio: 1 / 1;
-            }
-            .square {
-                font-size: 20px;
-                line-height: normal;
-            }
-            #chat {
-                width: 100%;
-                max-width: 400px;
-                height: 300px;
-                margin-top: 20px;
-            }
-            #chat-messages {
-                height: 200px;
-            }
-            #chat-input {
-                width: 70%;
-            }
-            #chat-send, #record-audio, #stop-audio, #start-video, #stop-video {
-                width: 25%;
-                margin: 5px 2%;
-            }
-            #game-buttons {
-                padding-top: 10px;
-            }
-            #back-button, #save-button, #resign-button {
-                width: 45%;
-                margin: 5px 2%;
-            }
-            #load-button {
-                width: 50%;
-            }
-            #saved-games {
-                max-height: 150px;
-            }
-            #timers {
-                margin: 10px 0;
-            }
-            #video-container {
-                flex-direction: column;
-            }
-            #local-video, #remote-video {
-                width: 100%;
-                max-width: 200px;
-            }
-            #waitlist button {
-                width: 90%;
-            }
-            .player-item {
-                width: 90%;
-            }
-            .player-item img {
-                width: 30px;
-                height: 30px;
-            }
-            #private-chat input, #private-chat button {
-                width: 90%;
-            }
-            #global-chat-input {
-                width: 60%;
-            }
-            #global-chat button, #play-with-bot {
-                padding: 8px 15px;
-            }
-            #promotion-modal-content, #bot-config-modal-content {
-                width: 90%;
-                max-width: 300px;
-            }
+        .error {
+            color: #ff4040;
+            font-size: 0.9em;
         }
     </style>
 </head>
 <body>
     <div id="loading-screen">
-        <div id="logo">PeonKing</div>
-        <div id="loading-bar-container">
-            <div id="loading-bar"></div>
-        </div>
+        <img src="/static/favicon.ico" alt="Logo">
+        <p>Cargando Peón KinGame...</p>
     </div>
     <div id="login-register">
-        <form id="login-form">
+        <div class="auth-container">
             <h2>Iniciar Sesión</h2>
-            <input type="text" name="username" placeholder="Usuario" required>
-            <input type="password" name="password" placeholder="Contraseña" required>
-            <button type="submit">Iniciar Sesión</button>
-            <p id="login-error" style="color: red;"></p>
-        </form>
-        <form id="register-form" enctype="multipart/form-data">
-            <h2>Registro</h2>
-            <input type="text" name="username" placeholder="Usuario" required>
-            <input type="password" name="password" placeholder="Contraseña" required>
-            <input type="file" name="avatar" accept="image/*" onchange="previewAvatar(event)">
-            <img id="avatar-preview" src="/static/default-avatar.png" alt="Avatar Preview">
-            <button type="submit">Registrarse</button>
-            <p id="register-error" style="color: red;"></p>
-        </form>
-    </div>
-    <div id="waitlist" style="display: none;">
-        <h3>Jugadores Disponibles</h3>
-        <div id="waitlist-players"></div>
-        <button onclick="goBackFromWaitlist()">Volver atrás</button>
-    </div>
-    <div id="private-chat" style="display: none;">
-        <h3>Chat Privado</h3>
-        <div id="private-chat-messages"></div>
-        <input id="private-chat-input" type="text" placeholder="Escribí tu mensaje...">
-        <button onclick="sendPrivateMessage()">Enviar</button>
-        <button onclick="acceptConditions()">Iniciar Partida</button>
-        <button onclick="goBackFromPrivateChat()">Volver atrás</button>
-    </div>
-    <div id="promotion-modal">
-        <div id="promotion-modal-content">
-            <h2>Elige una pieza para la promoción</h2>
-            <button onclick="selectPromotion('q')">Reina</button>
-            <button onclick="selectPromotion('r')">Torre</button>
-            <button onclick="selectPromotion('b')">Alfil</button>
-            <button onclick="selectPromotion('n')">Caballo</button>
+            <form id="login-form">
+                <input type="text" name="username" placeholder="Usuario" required>
+                <input type="password" name="password" placeholder="Contraseña" required>
+                <button type="submit">Iniciar Sesión</button>
+                <p id="login-error" class="error"></p>
+            </form>
+            <h2>Registrarse</h2>
+            <form id="register-form" enctype="multipart/form-data">
+                <input type="text" name="username" placeholder="Usuario" required>
+                <input type="password" name="password" placeholder="Contraseña" required>
+                <input type="file" name="avatar" accept="image/*" onchange="previewAvatar(event)">
+                <img id="avatar-preview" src="/static/default-avatar.png" alt="Avatar">
+                <button type="submit">Registrarse</button>
+                <p id="register-error" class="error"></p>
+            </form>
         </div>
     </div>
-    <div id="bot-config-modal">
-        <div id="bot-config-modal-content">
-            <h2>Configurar Partida con Bot</h2>
-            <select id="bot-timer-select">
+    <div class="container">
+        <h1>Peón KinGame</h1>
+        <div id="user-info">
+            <p id="neig-balance">10000 Neig</p>
+            <p id="elo-level">ELO: 0 (Nivel 0)</p>
+            <button onclick="logout()">Cerrar Sesión</button>
+        </div>
+        <div id="room-selection">
+            <h2>Unirse a una Sala</h2>
+            <input id="room-id" type="text" placeholder="ID de la sala">
+            <select id="timer-select">
                 <option value="0">Sin temporizador</option>
-                <option value="1">1 minuto</option>
-                <option value="3">3 minutos</option>
                 <option value="5">5 minutos</option>
                 <option value="10">10 minutos</option>
                 <option value="15">15 minutos</option>
-                <option value="30">30 minutos</option>
             </select>
+            <input id="color-select" type="color" value="#FFFFFF">
+            <button onclick="joinRoom()">Unirse</button>
+            <button onclick="playWithBot()">Jugar con Bot</button>
+            <button onclick="joinWaitlist()">Buscar Partida</button>
+        </div>
+        <div id="chessboard"></div>
+        <div id="timers">
+            <p id="white-timer">Blancas: --:--</p>
+            <p id="black-timer">Negras: --:--</p>
+        </div>
+        <div id="chat">
+            <h3>Chat de la Partida</h3>
+            <div id="chat-messages"></div>
+            <input id="chat-input" type="text" placeholder="Escribe un mensaje...">
+            <button onclick="sendMessage()">Enviar</button>
+            <button id="record-audio" onclick="startRecording()">Grabar Audio</button>
+            <button id="stop-audio" onclick="stopRecording()" style="display: none;">Detener</button>
+            <button id="start-video" onclick="startVideoCall()">Iniciar Video</button>
+            <button id="stop-video" onclick="stopVideoCall()" style="display: none;">Detener Video</button>
+        </div>
+        <video id="local-video" autoplay muted></video>
+        <video id="remote-video" autoplay></video>
+        <div id="game-buttons">
+            <button onclick="saveGame()">Guardar Partida</button>
+            <button onclick="loadSavedGames()">Cargar Partida</button>
+            <button onclick="resignGame()">Abandonar</button>
+            <button onclick="goBack()">Volver</button>
+        </div>
+        <div id="saved-games"></div>
+        <div id="promotion-modal">
+            <h3>Promoción de Peón</h3>
+            <button onclick="selectPromotion('q')">♛</button>
+            <button onclick="selectPromotion('r')">♜</button>
+            <button onclick="selectPromotion('b')">♝</button>
+            <button onclick="selectPromotion('n')">♞</button>
+        </div>
+        <div id="bot-config-modal">
+            <h2>Configurar Partida con Bot</h2>
+            <label>Temporizador:</label>
+            <select id="bot-timer-select">
+                <option value="0">Sin temporizador</option>
+                <option value="5">5 minutos</option>
+                <option value="10">10 minutos</option>
+                <option value="15">15 minutos</option>
+            </select>
+            <label>Dificultad:</label>
             <select id="bot-difficulty-select">
                 <option value="easy">Fácil</option>
-                <option value="medium" selected>Medio</option>
+                <option value="medium">Medio</option>
                 <option value="hard">Difícil</option>
             </select>
+            <label>Color:</label>
             <select id="bot-player-color-select">
                 <option value="white">Blancas</option>
                 <option value="black">Negras</option>
             </select>
-            <button onclick="startBotGame()">Iniciar Partida</button>
+            <button onclick="startBotGame()">Iniciar</button>
             <button onclick="closeBotConfigModal()">Cancelar</button>
         </div>
     </div>
-    <div class="container">
-        <div class="user-stats">
-            <span id="neig-balance">10000 Neig</span><img src="/static/neig.png" alt="Neig">
-            <span id="elo-level">ELO: 0 (Nivel 0)</span>
-            <button id="logout-button" onclick="logout()">Cerrar Sesión</button>
-        </div>
-        <div id="room-selection">
-            <h2>Unirse a una sala</h2>
-            <input type="text" id="room-id" placeholder="ID de la sala">
-            <select id="timer-select">
-                <option value="0">Sin temporizador</option>
-                <option value="1">1 minuto</option>
-                <option value="3">3 minutos</option>
-                <option value="5">5 minutos</option>
-                <option value="10">10 minutos</option>
-                <option value="15">15 minutos</option>
-                <option value="30">30 minutos</option>
-            </select>
-            <input type="color" id="color-select" value="#FFFFFF">
-            <button onclick="joinRoom()">Jugar</button>
-            <button onclick="joinWaitlist()">Esperar Oponente</button>
-            <button id="play-with-bot" onclick="openBotConfigModal()">Jugar con Bot</button>
-            <button id="load-button" onclick="loadSavedGames()">Cargar partida</button>
-            <div id="saved-games"></div>
-        </div>
-        <div id="online-players">
-            <h3>Jugadores en Línea</h3>
-        </div>
-        <div id="global-chat"></div>
-        <div>
-            <input id="global-chat-input" type="text" placeholder="Chat global">
-            <button id="global-chat-send" onclick="sendGlobalMessage()">Enviar</button>
-        </div>
-        <div id="timers">
-            <span id="white-timer">Blancas: --:--</span> | 
-            <span id="black-timer">Negras: --:--</span>
-        </div>
-        <div class="game-area">
-            <div id="chessboard" class="chessboard"></div>
-            <div id="chat">
-                <div id="chat-messages"></div>
-                <input type="text" id="chat-input" placeholder="Escribí un mensaje">
-                <button id="chat-send" onclick="sendMessage()">Enviar</button>
-                <button id="record-audio" onclick="startRecording()">Grabar Audio</button>
-                <button id="stop-audio" onclick="stopRecording()" style="display: none;">Detener</button>
-                <button id="start-video" onclick="startVideoCall()">Iniciar Videollamada</button>
-                <button id="stop-video" onclick="stopVideoCall()" style="display: none;">Detener Video</button>
-                <div id="video-container">
-                    <video id="local-video" autoplay muted></video>
-                    <video id="remote-video" autoplay></video>
-                </div>
-            </div>
-        </div>
-        <div id="game-buttons">
-            <button id="back-button" onclick="goBack()">Volver atrás</button>
-            <button id="save-button" onclick="saveGame()">Guardar Partida</button>
-            <button id="resign-button" onclick="resignGame()">Rendirse</button>
-        </div>
+    <div id="online-players">
+        <h3>Jugadores en Línea</h3>
+    </div>
+    <div id="global-chat-container">
+        <h3>Chat Global</h3>
+        <div id="global-chat-messages"></div>
+        <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
+        <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
+    </div>
+    <div id="waitlist">
+        <h2>Buscar Partida</h2>
+        <div id="waitlist-players"></div>
+        <button onclick="goBackFromWaitlist()">Volver</button>
+    </div>
+    <div id="private-chat">
+        <h2>Chat Privado</h2>
+        <div id="private-chat-messages"></div>
+        <input id="private-chat-input" type="text" placeholder="Escribe un mensaje...">
+        <button onclick="sendPrivateMessage()">Enviar</button>
+        <button onclick="acceptConditions()">Aceptar Condiciones</button>
+        <button onclick="goBackFromPrivateChat()">Volver</button>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://unpkg.com/simple-peer@9.11.0/simple-peer.min.js"></script>
+    <script src="/static/simple-peer.min.js"></script>
     <script src="/static/game.js"></script>
 </body>
 </html>
