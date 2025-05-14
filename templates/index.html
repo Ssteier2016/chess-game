@@ -13,7 +13,7 @@
             font-family: 'Cinzel', serif;
             margin: 0;
             padding: 0;
-            overflow: auto; /* Permitir scroll en móviles */
+            overflow: auto;
         }
         #loading-screen {
             position: fixed;
@@ -29,7 +29,7 @@
             z-index: 1000;
         }
         #loading-screen img {
-            width: 80px; /* Reducido para móviles */
+            width: 80px;
             height: 80px;
             margin-bottom: 15px;
         }
@@ -212,7 +212,7 @@
             background: #4a2c1a;
             border: 5px solid #8b5a2b;
             padding: 15px;
-            z-index: 1000;
+            z-index: 1100; /* Más alto que el chat global */
             width: 90%;
             max-width: 300px;
             box-sizing: border-box;
@@ -236,7 +236,7 @@
             background: #4a2c1a;
             border: 5px solid #8b5a2b;
             padding: 15px;
-            z-index: 1000;
+            z-index: 1100;
             color: #d4af37;
             text-align: center;
             width: 90%;
@@ -312,15 +312,45 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 90%;
-            max-width: 300px;
+            width: 300px;
+            min-width: 200px;
+            min-height: 50px;
             background: #4a2c1a;
             border: 2px solid #8b5a2b;
             padding: 10px;
             color: #d4af37;
             font-family: 'Roboto', sans-serif;
-            z-index: 900;
+            z-index: 1000;
             box-sizing: border-box;
+            cursor: move; /* Para arrastrar */
+            user-select: none; /* Evitar selección de texto al arrastrar */
+            resize: both; /* Permitir redimensionar */
+            overflow: auto; /* Para contenido interno */
+        }
+        #global-chat-container.minimized {
+            height: 40px; /* Solo el encabezado */
+            overflow: hidden;
+            resize: none; /* Desactivar redimensionar cuando está minimizado */
+        }
+        #global-chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        #global-chat-header h3 {
+            margin: 0;
+            font-size: 1.2em;
+            cursor: move;
+        }
+        #global-chat-controls button {
+            padding: 3px 8px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8em;
         }
         #global-chat-messages {
             height: 150px;
@@ -330,6 +360,7 @@
             color: #000;
             padding: 10px;
             margin-bottom: 10px;
+            display: block;
         }
         #global-chat-input {
             width: 70%;
@@ -355,7 +386,7 @@
             width: 100%;
             height: 100%;
             background: #2b1d0e url('/static/parchment.png');
-            z-index: 1000;
+            z-index: 1100;
             padding: 15px;
             overflow-y: auto;
             box-sizing: border-box;
@@ -392,7 +423,7 @@
             width: 100%;
             height: 100%;
             background: #2b1d0e url('/static/parchment.png');
-            z-index: 1000;
+            z-index: 1100;
             padding: 15px;
             box-sizing: border-box;
         }
@@ -464,7 +495,7 @@
         /* Media Queries para móviles (pantallas < 768px) */
         @media (max-width: 768px) {
             body {
-                overflow-y: auto; /* Permitir scroll vertical */
+                overflow-y: auto;
             }
             .container {
                 margin: 5px;
@@ -497,9 +528,12 @@
             #global-chat-container {
                 width: 90%;
                 max-width: 280px;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
+                min-width: 180px;
+                resize: none; /* Desactivar redimensionar en móviles */
+                touch-action: none; /* Mejorar interacción táctil */
+            }
+            #global-chat-messages {
+                height: 120px;
             }
             #chat {
                 width: 90%;
@@ -561,6 +595,10 @@
                 position: fixed;
                 bottom: 10px;
                 left: 170px;
+            }
+            #global-chat-container {
+                max-width: 400px;
+                max-height: 500px;
             }
         }
     </style>
@@ -670,7 +708,12 @@
         <h3>Jugadores en Línea</h3>
     </div>
     <div id="global-chat-container">
-        <h3>Chat Global</h3>
+        <div id="global-chat-header">
+            <h3>Chat Global</h3>
+            <div id="global-chat-controls">
+                <button onclick="toggleMinimizeChat()">−</button>
+            </div>
+        </div>
         <div id="global-chat-messages"></div>
         <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
         <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
@@ -691,5 +734,80 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script src="/static/simple-peer.min.js"></script>
     <script src="/static/game.js"></script>
+    <script>
+        // Funcionalidad para minimizar/maximizar el chat global
+        function toggleMinimizeChat() {
+            const chatContainer = document.getElementById('global-chat-container');
+            const minimizeButton = chatContainer.querySelector('#global-chat-controls button');
+            if (chatContainer.classList.toggle('minimized')) {
+                minimizeButton.textContent = '+';
+            } else {
+                minimizeButton.textContent = '−';
+            }
+        }
+
+        // Funcionalidad para mover el chat global
+        (function () {
+            const chatContainer = document.getElementById('global-chat-container');
+            const header = chatContainer.querySelector('#global-chat-header h3');
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+
+            const startDragging = (x, y) => {
+                initialX = x - currentX;
+                initialY = y - currentY;
+                isDragging = true;
+                chatContainer.style.transition = 'none';
+            };
+
+            const stopDragging = () => {
+                isDragging = false;
+                chatContainer.style.transition = 'all 0.2s ease';
+            };
+
+            const drag = (x, y) => {
+                if (isDragging) {
+                    currentX = x - initialX;
+                    currentY = y - initialY;
+                    // Limitar movimiento dentro de la ventana
+                    currentX = Math.max(0, Math.min(currentX, window.innerWidth - chatContainer.offsetWidth));
+                    currentY = Math.max(0, Math.min(currentY, window.innerHeight - chatContainer.offsetHeight));
+                    chatContainer.style.left = currentX + 'px';
+                    chatContainer.style.top = currentY + 'px';
+                    chatContainer.style.transform = 'none';
+                }
+            };
+
+            header.addEventListener('mousedown', (e) => {
+                currentX = parseInt(getComputedStyle(chatContainer).left) || window.innerWidth / 2 - chatContainer.offsetWidth / 2;
+                currentY = parseInt(getComputedStyle(chatContainer).top) || window.innerHeight / 2 - chatContainer.offsetHeight / 2;
+                startDragging(e.clientX, e.clientY);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                drag(e.clientX, e.clientY);
+            });
+
+            document.addEventListener('mouseup', stopDragging);
+
+            // Soporte para touch en móviles
+            header.addEventListener('touchstart', (e) => {
+                currentX = parseInt(getComputedStyle(chatContainer).left) || window.innerWidth / 2 - chatContainer.offsetWidth / 2;
+                currentY = parseInt(getComputedStyle(chatContainer).top) || window.innerHeight / 2 - chatContainer.offsetHeight / 2;
+                startDragging(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                drag(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            });
+
+            document.addEventListener('touchend', stopDragging);
+        })();
+    </script>
 </body>
 </html>
