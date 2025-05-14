@@ -22,7 +22,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #2b1d0e url('/static/parchment.png');
+            background: #2b1d0e url('https://www.transparenttextures.com/patterns/parchment.png');
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -88,7 +88,7 @@
             max-width: 1000px;
             margin: 20px auto;
             padding: 20px;
-            background: url('/static/parchment.png');
+            background: #2b1d0e url('https://www.transparenttextures.com/patterns/parchment.png');
             border: 5px solid #8b5a2b;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
             display: none;
@@ -143,7 +143,7 @@
             height: 400px;
             border: 3px solid #4a2c1a;
             background: #3c2f2f;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
             display: none;
             grid-template-columns: repeat(8, 1fr);
             grid-template-rows: repeat(8, 1fr);
@@ -159,8 +159,8 @@
             box-sizing: border-box;
         }
         .square.selected {
-    background-color: rgba(255, 255, 0, 0.5);
-}
+            background-color: rgba(255, 255, 0, 0.5);
+        }
         .white { background-color: #e6d7a3; }
         .black { background-color: #8b5a2b; }
         #room-selection {
@@ -182,7 +182,7 @@
             height: 300px;
             overflow-y: auto;
             color: #000;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
             font-size: 16px;
         }
         #chat-input {
@@ -191,7 +191,7 @@
             background: #e6d7a3;
             border: 2px solid #8b5a2b;
             color: #000;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #chat-send, #record-audio, #stop-audio, #start-video, #stop-video {
             padding: 5px 10px;
@@ -216,7 +216,7 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #load-button {
             display: block;
@@ -228,7 +228,7 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #saved-games {
             margin-top: 10px;
@@ -248,11 +248,11 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
             text-align: left;
         }
         #timers {
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
             font-size: 16px;
             color: #d4af37;
             text-align: center;
@@ -302,7 +302,7 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #waitlist-players {
             max-height: 300px;
@@ -347,7 +347,7 @@
             border: 2px solid #4a2c1a;
             border-radius: 5px;
             margin-bottom: 10px;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #private-chat input, #private-chat button {
             width: 80%;
@@ -357,7 +357,7 @@
             color: #d4af37;
             border: 2px solid #8b5a2b;
             border-radius: 5px;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #avatar-preview {
             width: 50px;
@@ -375,7 +375,7 @@
             max-height: 200px;
             overflow-y: auto;
             text-align: left;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #online-players h3 {
             margin: 0 0 10px 0;
@@ -394,7 +394,7 @@
             max-height: 200px;
             overflow-y: auto;
             color: #000;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #global-chat-input {
             width: 70%;
@@ -404,7 +404,7 @@
             color: #d4af37;
             border: 2px solid #8b5a2b;
             border-radius: 5px;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
         }
         #global-chat button, #play-with-bot {
             padding: 10px 20px;
@@ -413,8 +413,39 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
-            font-family: 'Junicode', sans-serif;
+            font-family: 'Roboto', sans-serif;
             margin: 5px;
+        }
+        #promotion-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        #promotion-modal-content {
+            background: #4a2c1a;
+            padding: 20px;
+            border: 3px solid #8b5a2b;
+            border-radius: 10px;
+            text-align: center;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+        }
+        #promotion-modal-content button {
+            margin: 10px;
+            padding: 10px 20px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
         }
         @media (max-width: 700px) {
             .container {
@@ -505,6 +536,10 @@
             #global-chat button, #play-with-bot {
                 padding: 8px 15px;
             }
+            #promotion-modal-content {
+                width: 90%;
+                max-width: 300px;
+            }
         }
     </style>
 </head>
@@ -546,6 +581,15 @@
         <button onclick="acceptConditions()">Iniciar Partida</button>
         <button onclick="goBackFromPrivateChat()">Volver atrás</button>
     </div>
+    <div id="promotion-modal">
+        <div id="promotion-modal-content">
+            <h2>Elige una pieza para la promoción</h2>
+            <button onclick="selectPromotion('q')">Reina</button>
+            <button onclick="selectPromotion('r')">Torre</button>
+            <button onclick="selectPromotion('b')">Alfil</button>
+            <button onclick="selectPromotion('n')">Caballo</button>
+        </div>
+    </div>
     <div class="container">
         <div class="user-stats">
             <span id="neig-balance">10000 Neig</span><img src="/static/neig.png" alt="Neig">
@@ -563,6 +607,15 @@
                 <option value="10">10 minutos</option>
                 <option value="15">15 minutos</option>
                 <option value="30">30 minutos</option>
+            </select>
+            <select id="difficulty-select">
+                <option value="easy">Fácil</option>
+                <option value="medium" selected>Medio</option>
+                <option value="hard">Difícil</option>
+            </select>
+            <select id="player-color-select">
+                <option value="white">Blancas</option>
+                <option value="black">Negras</option>
             </select>
             <input type="color" id="color-select" value="#FFFFFF">
             <button onclick="joinRoom()">Jugar</button>
@@ -605,8 +658,8 @@
             <button id="resign-button" onclick="resignGame()">Rendirse</button>
         </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="https://unpkg.com/simple-peer@9.11.0/simple-peer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.1/simple-peer.min.js"></script>
     <script src="/static/game.js"></script>
 </body>
 </html>
