@@ -13,7 +13,9 @@
             font-family: 'Cinzel', serif;
             margin: 0;
             padding: 0;
-            overflow: auto;
+            overflow-y: auto; /* Permitir desplazamiento vertical */
+            min-height: 100vh; /* Asegurar que el body ocupe toda la pantalla */
+            box-sizing: border-box;
         }
         #loading-screen {
             position: fixed;
@@ -39,7 +41,7 @@
         }
         .container {
             max-width: 1000px;
-            margin: 10px auto;
+            margin: 20px auto; /* Más espacio para un diseño holgado */
             padding: 15px;
             background: #2b1d0e url('/static/parchment.png');
             border: 5px solid #8b5a2b;
@@ -49,6 +51,12 @@
             align-items: center;
             position: relative;
             box-sizing: border-box;
+            min-height: calc(100vh - 40px); /* Limitar el desplazamiento al contenido */
+        }
+        #logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 10px;
         }
         #login-register {
             position: fixed;
@@ -212,7 +220,7 @@
             background: #4a2c1a;
             border: 5px solid #8b5a2b;
             padding: 15px;
-            z-index: 1100; /* Más alto que el chat global */
+            z-index: 1100;
             width: 90%;
             max-width: 300px;
             box-sizing: border-box;
@@ -243,23 +251,40 @@
             max-width: 300px;
             box-sizing: border-box;
         }
+        #bot-config-modal h2 {
+            margin: 0 0 15px;
+            font-size: 1.5em;
+        }
+        #bot-config-modal label {
+            display: block;
+            margin: 10px 0 5px;
+            font-size: 1em;
+        }
         #bot-config-modal select {
-            padding: 5px;
-            margin: 8px 0;
+            padding: 8px;
+            margin: 5px 0;
             background: #4a2c1a;
             color: #d4af37;
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             width: 100%;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+        #bot-config-modal .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
         }
         #bot-config-modal button {
-            padding: 8px 15px;
-            margin: 8px 5px;
+            padding: 8px 20px;
             background: #4a2c1a;
             color: #d4af37;
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             cursor: pointer;
+            font-family: 'Cinzel', serif;
         }
         #room-selection {
             display: none;
@@ -322,15 +347,15 @@
             font-family: 'Roboto', sans-serif;
             z-index: 1000;
             box-sizing: border-box;
-            cursor: move; /* Para arrastrar */
-            user-select: none; /* Evitar selección de texto al arrastrar */
-            resize: both; /* Permitir redimensionar */
-            overflow: auto; /* Para contenido interno */
+            cursor: move;
+            user-select: none;
+            resize: both;
+            overflow: auto;
         }
         #global-chat-container.minimized {
-            height: 40px; /* Solo el encabezado */
+            height: 40px;
             overflow: hidden;
-            resize: none; /* Desactivar redimensionar cuando está minimizado */
+            resize: none;
         }
         #global-chat-header {
             display: flex;
@@ -474,8 +499,21 @@
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             z-index: 900;
-            width: 150px;
+            width: 180px;
             box-sizing: border-box;
+            text-align: right;
+        }
+        #user-info p {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        #user-info img {
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            vertical-align: middle;
         }
         #user-info button {
             margin-top: 5px;
@@ -498,9 +536,12 @@
                 overflow-y: auto;
             }
             .container {
-                margin: 5px;
+                margin: 10px;
                 padding: 10px;
                 max-width: 100%;
+            }
+            #logo {
+                max-width: 100px;
             }
             #chessboard {
                 grid-template-columns: repeat(8, 35px);
@@ -524,13 +565,17 @@
                 margin: 10px auto;
                 width: 90%;
                 max-width: 300px;
+                text-align: center;
+            }
+            #user-info p {
+                justify-content: center;
             }
             #global-chat-container {
                 width: 90%;
                 max-width: 280px;
                 min-width: 180px;
-                resize: none; /* Desactivar redimensionar en móviles */
-                touch-action: none; /* Mejorar interacción táctil */
+                resize: none;
+                touch-action: none;
             }
             #global-chat-messages {
                 height: 120px;
@@ -629,9 +674,10 @@
         </div>
     </div>
     <div class="container">
+        <img id="logo" src="/static/rey.png" alt="Logo Rey">
         <h1>Peón KinGame</h1>
         <div id="user-info">
-            <p id="neig-balance">10000 Neig</p>
+            <p id="neig-balance">10000 Neig <img src="/static/neig.png" alt="Neig"></p>
             <p id="elo-level">ELO: 0 (Nivel 0)</p>
             <button onclick="logout()">Cerrar Sesión</button>
         </div>
@@ -646,7 +692,7 @@
             </select>
             <input id="color-select" type="color" value="#FFFFFF">
             <button onclick="joinRoom()">Unirse</button>
-            <button onclick="playWithBot()">Jugar con Bot</button>
+            <button onclick="openBotConfigModal()">Jugar con Bot</button>
             <button onclick="joinWaitlist()">Buscar Partida</button>
         </div>
         <div id="chessboard"></div>
@@ -682,26 +728,28 @@
         </div>
         <div id="bot-config-modal">
             <h2>Configurar Partida con Bot</h2>
-            <label>Temporizador:</label>
+            <label for="bot-timer-select">Temporizador:</label>
             <select id="bot-timer-select">
                 <option value="0">Sin temporizador</option>
                 <option value="5">5 minutos</option>
                 <option value="10">10 minutos</option>
                 <option value="15">15 minutos</option>
             </select>
-            <label>Dificultad:</label>
+            <label for="bot-difficulty-select">Dificultad:</label>
             <select id="bot-difficulty-select">
                 <option value="easy">Fácil</option>
                 <option value="medium">Medio</option>
                 <option value="hard">Difícil</option>
             </select>
-            <label>Color:</label>
+            <label for="bot-player-color-select">Color:</label>
             <select id="bot-player-color-select">
                 <option value="white">Blancas</option>
                 <option value="black">Negras</option>
             </select>
-            <button onclick="startBotGame()">Iniciar</button>
-            <button onclick="closeBotConfigModal()">Cancelar</button>
+            <div class="button-container">
+                <button onclick="startBotGame()">Iniciar</button>
+                <button onclick="closeBotConfigModal()">Cancelar</button>
+            </div>
         </div>
     </div>
     <div id="online-players">
@@ -772,7 +820,6 @@
                 if (isDragging) {
                     currentX = x - initialX;
                     currentY = y - initialY;
-                    // Limitar movimiento dentro de la ventana
                     currentX = Math.max(0, Math.min(currentX, window.innerWidth - chatContainer.offsetWidth));
                     currentY = Math.max(0, Math.min(currentY, window.innerHeight - chatContainer.offsetHeight));
                     chatContainer.style.left = currentX + 'px';
@@ -793,7 +840,6 @@
 
             document.addEventListener('mouseup', stopDragging);
 
-            // Soporte para touch en móviles
             header.addEventListener('touchstart', (e) => {
                 currentX = parseInt(getComputedStyle(chatContainer).left) || window.innerWidth / 2 - chatContainer.offsetWidth / 2;
                 currentY = parseInt(getComputedStyle(chatContainer).top) || window.innerHeight / 2 - chatContainer.offsetHeight / 2;
@@ -808,6 +854,16 @@
 
             document.addEventListener('touchend', stopDragging);
         })();
+
+        // Funcionalidad para abrir el modal de configuración del bot
+        function openBotConfigModal() {
+            document.getElementById('bot-config-modal').style.display = 'block';
+        }
+
+        // Funcionalidad para cerrar el modal de configuración del bot
+        function closeBotConfigModal() {
+            document.getElementById('bot-config-modal').style.display = 'none';
+        }
     </script>
 </body>
 </html>
