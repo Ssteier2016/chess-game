@@ -322,6 +322,21 @@ def on_join(data):
     else:
         emit('waiting_opponent', {'message': 'Esperando a otro jugador...'}, to=sid)
 
+@socketio.on('global_chat_message')
+def on_global_chat_message(data):
+    sid = request.sid
+    username = sessions.get(sid)
+    if not username:
+        emit('error', {'message': 'Debes iniciar sesión para usar el chat global'}, to=sid)
+        return
+    message = data['message']
+    if message.strip():
+        socketio.emit('new_global_message', {
+            'username': username,
+            'message': message,
+            'timestamp': time.strftime('%H:%M:%S')
+        })
+
 @socketio.on('watch_game')
 def on_watch_game(data):
     room = data['room']
