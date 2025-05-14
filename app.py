@@ -16,7 +16,7 @@ app.secret_key = os.getenv('SECRET_KEY', 'Ma730yIan')
 socketio = SocketIO(app, cors_allowed_origins="*")
 DATABASE_PATH = '/opt/render/project/src/users.db' if os.getenv('RENDER') else 'users.db'
 stockfish_path = "src/stockfish"
-engine = chess.engine.SimpleEngine.popen_uci("src/stockfish")
+engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
 
 sessions = {}
 players = {}
@@ -40,8 +40,7 @@ def board_to_fen(board, turn):
         if empty > 0:
             fen += str(empty)
         fen += '/'
-    fen = fen[:-1]  # Quitar última barra
-    fen = fen.replace(' ', '')  # Asegurar que no haya espacios
+    fen = fen[:-1]
     fen += f" {'w' if turn == 'white' else 'b'} - - 0 1"
     return fen
 
@@ -61,120 +60,20 @@ def fen_to_board(fen):
     turn = 'white' if fen_parts[1] == 'w' else 'black'
     return board, turn
 
-def reset_board(room=None):
-    board = [
-        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
-        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
-        ['.', '.', '.', '.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.', '.', '.', '.'],
-        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
-        ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
-    ]
-    return board, 'white'
+def reset_board():
+    """Inicializar tablero de ajedrez."""
+    return chess.Board()
 
-def is_white(piece):
-    return piece.isupper()
+def init_db():
+    conn = sqlite3.connect(DATABASE_PATH)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password BLOB, avatar TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS saved_games (username TEXT, room TEXT, game_name TEXT, fen TEXT, turn TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS wallets (username TEXT PRIMARY KEY, neig REAL DEFAULT 10000, elo INTEGER DEFAULT 0, level INTEGER DEFAULT 0)''')
+    conn.commit()
+    conn.close()
 
-def is_black(piece):
-    return piece.islower()
-
-def is_valid_move(piece, start_row, start_col, end_row, end_col, board):
-    target = board[end_row][end_col]
-    if target != '.' and is_white(piece) == is_white(target):
-        return False
-    dx = abs(end_row - start_row)
-    dy = abs(end_col - start_col)
-    piece = piece.lower()
-    if piece == 'p':
-        direction = -1 if is_white(board[start_row][start_col]) else 1
-        if start_col == end_col and board[end_row][end_col] == '.':
-            if end_row == start_row + direction:
-                return True
-            if (start_row == 1 and direction == 1) or (start_row == 6 and direction == -1):
-                if end_row == start_row + 2 * direction and board[start_row + direction][start_col] == '.':
-                    return True
-        if dx == 1 and dy == 1 and target != '.' and is_white(target) != is_white(board[start_row][start_col]):
-            if end_row == start_row + direction:
-                return True
-        return False
-    elif piece == 'r':
-        if dx == 0 or dy == 0:
-            return is_path_clear(start_row, start_col, end_row, end_col, board)
-        return False
-    elif piece == 'n':
-        return (dx == 2 and dy == 1) or (dx == 1 and dy == 2)
-    elif piece == 'b':
-        if dx == dy:
-            return is_path_clear(start_row, start_col, end_row, end_col, board)
-        return False
-    elif piece == 'q':
-        if dx == 0 or dy == 0 or dx == dy:
-            return is_path_clear(start_row, start_col, end_row, end_col, board)
-        return False
-    elif piece == 'k':
-        return dx <= 1 and dy <= 1 and (dx > 0 or dy > 0)
-    return False
-
-def is_path_clear(start_row, start_col, end_row, end_col, board):
-    if start_row == end_row:
-        step = 1 if end_col > start_col else -1
-        for col in range(start_col + step, end_col, step):
-            if board[start_row][col] != '.':
-                return False
-    elif start_col == end_col:
-        step = 1 if end_row > start_row else -1
-        for row in range(start_row + step, end_row, step):
-            if board[row][start_col] != '.':
-                return False
-    else:
-        row_step = 1 if end_row > start_row else -1
-        col_step = 1 if end_col > start_col else -1
-        row, col = start_row + row_step, start_col + col_step
-        while row != end_row and col != end_col:
-            if board[row][col] != '.':
-                return False
-            row += row_step
-            col += col_step
-    return True
-
-def is_in_check(board, color):
-    king_position = None
-    for row in range(8):
-        for col in range(8):
-            piece = board[row][col]
-            if color == 'white' and piece == 'K':
-                king_position = (row, col)
-            elif color == 'black' and piece == 'k':
-                king_position = (row, col)
-    if king_position is None:
-        return False
-    king_row, king_col = king_position
-    for row in range(8):
-        for col in range(8):
-            piece = board[row][col]
-            if piece != '.' and ((color == 'white' and is_black(piece)) or (color == 'black' and is_white(piece))):
-                if is_valid_move(piece, row, col, king_row, king_col, board):
-                    return True
-    return False
-
-def is_checkmate(board, color):
-    if not is_in_check(board, color):
-        return False
-    for start_row in range(8):
-        for start_col in range(8):
-            piece = board[start_row][start_col]
-            if piece != '.' and (is_white(piece) if color == 'white' else is_black(piece)):
-                for end_row in range(8):
-                    for end_col in range(8):
-                        if is_valid_move(piece, start_row, start_col, end_row, end_col, board):
-                            temp_board = [row[:] for row in board]
-                            temp_board[end_row][end_col] = piece
-                            temp_board[start_row][start_col] = '.'
-                            if not is_in_check(temp_board, color):
-                                return False
-    return True
+init_db()
 
 def load_user_data(username):
     conn = sqlite3.connect(DATABASE_PATH)
@@ -217,17 +116,6 @@ def update_timer(room):
                 del players[room]
             if room in games:
                 del games[room]
-
-def init_db():
-    conn = sqlite3.connect(DATABASE_PATH)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password BLOB, avatar TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS saved_games (username TEXT, room TEXT, game_name TEXT, board TEXT, turn TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS wallets (username TEXT PRIMARY KEY, neig REAL DEFAULT 10000, elo INTEGER DEFAULT 0, level INTEGER DEFAULT 0)''')
-    conn.commit()
-    conn.close()
-
-init_db()
 
 @app.route('/')
 def index():
@@ -389,10 +277,10 @@ def on_join(data):
     emit('color_assigned', {'color': players[room][sid]['color'], 'chosenColor': chosen_color}, to=sid)
 
     if room not in games:
-        board, turn = reset_board(room)
+        board = reset_board()
         games[room] = {
-            'board': board,
-            'turn': turn,
+            'chessboard': board,
+            'turn': 'white',
             'time_white': timer_minutes * 60 if timer_minutes > 0 else None,
             'time_black': timer_minutes * 60 if timer_minutes > 0 else None,
             'last_move_time': time.time() if timer_minutes > 0 else None
@@ -406,8 +294,15 @@ def on_join(data):
             games[room]['last_move_time'] = time.time()
 
         player_colors = {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
+        board_state = [['.' for _ in range(8)] for _ in range(8)]
+        for square in chess.SQUARES:
+            piece = games[room]['chessboard'].piece_at(square)
+            if piece:
+                row, col = 7 - (square // 8), square % 8
+                board_state[row][col] = piece.symbol()
+
         socketio.emit('game_start', {
-            'board': games[room]['board'],
+            'board': board_state,
             'turn': games[room]['turn'],
             'time_white': games[room]['time_white'],
             'time_black': games[room]['time_black'],
@@ -426,7 +321,19 @@ def on_watch_game(data):
         return
     if room in games:
         join_room(room)
-        emit('game_start', games[room], to=sid)
+        board_state = [['.' for _ in range(8)] for _ in range(8)]
+        for square in chess.SQUARES:
+            piece = games[room]['chessboard'].piece_at(square)
+            if piece:
+                row, col = 7 - (square // 8), square % 8
+                board_state[row][col] = piece.symbol()
+        emit('game_start', {
+            'board': board_state,
+            'turn': games[room]['turn'],
+            'time_white': games[room]['time_white'],
+            'time_black': games[room]['time_black'],
+            'playerColors': {players[room][sid]['color']: players[room][sid]['chosen_color'] for sid in players[room]}
+        }, to=sid)
 
 @socketio.on('play_with_bot')
 def on_play_with_bot(data):
@@ -438,11 +345,11 @@ def on_play_with_bot(data):
 
     timer_minutes = int(data.get('timer', 0))
     chosen_color = data.get('color', '#FFFFFF')
-    player_color = 'white'  # Por defecto, el usuario juega con blancas
-    bot_color = 'black'
+    difficulty = data.get('difficulty', 'medium')
+    player_color = data.get('player_color', 'white')
+    bot_color = 'black' if player_color == 'white' else 'white'
     bot_name = 'Stockfish'
 
-    # Crear una sala única para la partida contra el bot
     room = f"bot_{sid}_{str(uuid.uuid4())}"
     join_room(room)
 
@@ -451,16 +358,23 @@ def on_play_with_bot(data):
         'bot': {'color': bot_color, 'chosen_color': '#000000', 'username': bot_name}
     }
 
-    board, turn = reset_board(room)
+    board = reset_board()
     games[room] = {
-        'board': board,
-        'turn': turn,
+        'chessboard': board,
+        'turn': 'white',
         'time_white': timer_minutes * 60 if timer_minutes > 0 else None,
         'time_black': timer_minutes * 60 if timer_minutes > 0 else None,
         'last_move_time': time.time() if timer_minutes > 0 else None,
         'is_bot_game': True,
-        'fen': board_to_fen(board, turn)
+        'difficulty': difficulty
     }
+
+    board_state = [['.' for _ in range(8)] for _ in range(8)]
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            row, col = 7 - (square // 8), square % 8
+            board_state[row][col] = piece.symbol()
 
     emit('color_assigned', {'color': player_color, 'chosenColor': chosen_color}, to=sid)
     player_colors = {
@@ -468,8 +382,8 @@ def on_play_with_bot(data):
         bot_color: '#000000'
     }
     socketio.emit('game_start', {
-        'board': board,
-        'turn': turn,
+        'board': board_state,
+        'turn': 'white',
         'time_white': games[room]['time_white'],
         'time_black': games[room]['time_black'],
         'playerColors': player_colors,
@@ -477,7 +391,6 @@ def on_play_with_bot(data):
         'is_bot_game': True
     }, room=room)
 
-    # Si el usuario juega con negras, el bot (blancas) mueve primero
     if player_color == 'black':
         make_bot_move(room, sid)
 
@@ -485,32 +398,41 @@ def make_bot_move(room, sid):
     if room not in games or not games[room].get('is_bot_game'):
         return
 
-    board = chess.Board(games[room]['fen'])
-    result = engine.play(board, chess.engine.Limit(time=0.1))
+    difficulty = games[room].get('difficulty', 'medium')
+    if difficulty == 'easy':
+        skill_level = 0
+        think_time = 0.05
+    elif difficulty == 'hard':
+        skill_level = 20
+        think_time = 1.0
+    else:
+        skill_level = 10
+        think_time = 0.1
+
+    board = games[room]['chessboard']
+    engine.configure({"Skill Level": skill_level})
+    result = engine.play(board, chess.engine.Limit(time=think_time))
     move = result.move
     board.push(move)
-    games[room]['fen'] = board.fen()
-
-    # Convertir el movimiento a coordenadas para el tablero interno
-    start_square = move.from_square
-    end_square = move.to_square
-    start_row, start_col = 7 - (start_square // 8), start_square % 8
-    end_row, end_col = 7 - (end_square // 8), end_square % 8
-
-    games[room]['board'][end_row][end_col] = games[room]['board'][start_row][start_col]
-    games[room]['board'][start_row][start_col] = '.'
     games[room]['turn'] = 'black' if games[room]['turn'] == 'white' else 'white'
 
-    update_timer(room)
-    socketio.emit('update_board', {'board': games[room]['board'], 'turn': games[room]['turn']}, room=room)
+    board_state = [['.' for _ in range(8)] for _ in range(8)]
+    for square in chess.SQUARES:
+        piece = board.piece_at(square)
+        if piece:
+            row, col = 7 - (square // 8), square % 8
+            board_state[row][col] = piece.symbol()
 
-    if is_in_check(games[room]['board'], games[room]['turn']):
+    update_timer(room)
+    socketio.emit('update_board', {'board': board_state, 'turn': games[room]['turn']}, room=room)
+
+    if board.is_check():
         socketio.emit('check', {'message': '¡Jaque!'}, room=room)
-        if is_checkmate(games[room]['board'], games[room]['turn']):
+        if board.is_checkmate():
             winner_username = sessions[sid] if games[room]['turn'] != players[room][sid]['color'] else 'Stockfish'
             user_data = load_user_data(sessions[sid])
-            elo_points = 50  # Puntos fijos por vencer al bot
-            neig_points = 25
+            elo_points = 50 if difficulty == 'easy' else 100 if difficulty == 'medium' else 150
+            neig_points = 25 if difficulty == 'easy' else 50 if difficulty == 'medium' else 75
             if winner_username == sessions[sid]:
                 user_data['elo'] += elo_points
                 user_data['neig'] += neig_points
@@ -524,37 +446,40 @@ def make_bot_move(room, sid):
             }, room=room)
             del players[room]
             del games[room]
+    elif board.is_stalemate() or board.is_insufficient_material() or board.is_seventyfive_moves() or board.is_fivefold_repetition():
+        socketio.emit('game_over', {'message': '¡Partida terminada en tablas!'}, room=room)
+        del players[room]
+        del games[room]
 
 @socketio.on('move')
 def on_move(data):
-    from_square = data['from']  # Ejemplo: 'e2'
-    to_square = data['to']      # Ejemplo: 'e4'
+    from_square = data['from']
+    to_square = data['to']
+    promotion = data.get('promotion')
     room = data['room']
     
     if room not in games:
-        print(f"Error: Sala {room} no encontrada")
+        emit('error', {'message': 'Sala no encontrada'}, room=room)
         return
     
     game = games[room]
+    sid = request.sid
     chessboard = game['chessboard']
-    board = game['board']
     
-    # Crear el movimiento en notación UCI
     move_uci = from_square + to_square
+    if promotion:
+        move_uci += promotion.lower()
+    
     try:
         move = chess.Move.from_uci(move_uci)
     except ValueError:
-        print(f"Movimiento inválido: {move_uci}")
-        socketio.emit('error', {'message': 'Movimiento inválido'}, room=room)
+        emit('error', {'message': 'Movimiento inválido'}, room=room)
         return
     
-    # Verificar si el movimiento es legal
     if move in chessboard.legal_moves:
-        # Aplicar el movimiento
         chessboard.push(move)
         game['turn'] = 'black' if game['turn'] == 'white' else 'white'
         
-        # Convertir el tablero a formato de lista para el cliente
         board_state = [['.' for _ in range(8)] for _ in range(8)]
         for square in chess.SQUARES:
             piece = chessboard.piece_at(square)
@@ -562,34 +487,43 @@ def on_move(data):
                 row, col = 7 - (square // 8), square % 8
                 board_state[row][col] = piece.symbol()
         
-        # Emitir actualización del tablero
+        update_timer(room)
         socketio.emit('update_board', {
             'board': board_state,
             'turn': game['turn']
         }, room=room)
         
-        # Si es una partida contra el bot, hacer que el bot responda
-        if room.startswith('bot_') and game['turn'] != game['player_color']:
-            bot_move = make_bot_move(chessboard)
-            if bot_move:
-                chessboard.push(bot_move)
-                game['turn'] = game['player_color']
-                # Actualizar el tablero nuevamente
-                for square in chess.SQUARES:
-                    piece = chessboard.piece_at(square)
-                    if piece:
-                        row, col = 7 - (square // 8), square % 8
-                        board_state[row][col] = piece.symbol()
-                    else:
-                        row, col = 7 - (square // 8), square % 8
-                        board_state[row][col] = '.'
-                socketio.emit('update_board', {
-                    'board': board_state,
-                    'turn': game['turn']
+        if chessboard.is_check():
+            socketio.emit('check', {'message': '¡Jaque!'}, room=room)
+            if chessboard.is_checkmate():
+                winner_username = sessions[sid] if game['turn'] != players[room][sid]['color'] else 'Stockfish' if game.get('is_bot_game') else sessions[[s for s in players[room] if s != sid][0]]
+                user_data = load_user_data(sessions[sid])
+                elo_points = 50 if not game.get('is_bot_game') else (50 if game['difficulty'] == 'easy' else 100 if game['difficulty'] == 'medium' else 150)
+                neig_points = 25 if not game.get('is_bot_game') else (25 if game['difficulty'] == 'easy' else 50 if game['difficulty'] == 'medium' else 75)
+                if winner_username == sessions[sid]:
+                    user_data['elo'] += elo_points
+                    user_data['neig'] += neig_points
+                    user_data['level'] = calculate_level(user_data['elo'])
+                    save_user_data(sessions[sid], user_data['neig'], user_data['elo'], user_data['level'])
+                    emit('user_data_update', {'neig': user_data['neig'], 'elo': user_data['elo'], 'level': user_data['level']}, to=sid)
+                socketio.emit('game_over', {
+                    'message': f'¡Jaque mate! Gana {winner_username}',
+                    'elo_points': elo_points if winner_username == sessions[sid] else 0,
+                    'neig_points': neig_points if winner_username == sessions[sid] else 0
                 }, room=room)
+                del players[room]
+                del games[room]
+                return
+            elif chessboard.is_stalemate() or chessboard.is_insufficient_material() or chessboard.is_seventyfive_moves() or chessboard.is_fivefold_repetition():
+                socketio.emit('game_over', {'message': '¡Partida terminada en tablas!'}, room=room)
+                del players[room]
+                del games[room]
+                return
+        
+        if game.get('is_bot_game') and game['turn'] != players[room][sid]['color']:
+            make_bot_move(room, sid)
     else:
-        print(f"Movimiento ilegal: {move_uci}")
-        socketio.emit('error', {'message': 'Movimiento ilegal'}, room=room)
+        emit('error', {'message': 'Movimiento ilegal'}, room=room)
 
 @socketio.on('resign')
 def on_resign(data):
@@ -597,8 +531,8 @@ def on_resign(data):
     sid = request.sid
     if room in players and sid in players[room]:
         user_data = load_user_data(sessions[sid])
-        elo_points = 50
-        neig_points = 25
+        elo_points = 50 if not games[room].get('is_bot_game') else (50 if games[room]['difficulty'] == 'easy' else 100 if games[room]['difficulty'] == 'medium' else 150)
+        neig_points = 25 if not games[room].get('is_bot_game') else (25 if games[room]['difficulty'] == 'easy' else 50 if games[room]['difficulty'] == 'medium' else 75)
         if games[room].get('is_bot_game'):
             user_data['elo'] = max(0, user_data['elo'] - elo_points)
             user_data['neig'] = max(0, user_data['neig'] - neig_points)
@@ -691,17 +625,18 @@ def on_video_stop(data):
 def on_save_game(data):
     room = data['room']
     game_name = data['game_name']
-    board = data['board']
-    turn = data['turn']
     sid = request.sid
     username = sessions.get(sid)
     if not username:
         emit('error', {'message': 'Debes iniciar sesión'}, to=sid)
         return
+    if room not in games:
+        emit('error', {'message': 'Sala no encontrada'}, to=sid)
+        return
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
-    c.execute('INSERT INTO saved_games (username, room, game_name, board, turn) VALUES (?, ?, ?, ?, ?)',
-              (username, room, game_name, json.dumps(board), turn))
+    c.execute('INSERT INTO saved_games (username, room, game_name, fen, turn) VALUES (?, ?, ?, ?, ?)',
+              (username, room, game_name, games[room]['chessboard'].fen(), games[room]['turn']))
     conn.commit()
     conn.close()
     emit('game_saved', {'message': f'Partida "{game_name}" guardada exitosamente'})
@@ -715,8 +650,8 @@ def on_get_saved_games(data):
         return
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
-    c.execute('SELECT room, game_name, board, turn FROM saved_games WHERE username = ?', (username,))
-    games_list = [{'room': row[0], 'game_name': row[1], 'board': json.loads(row[2]), 'turn': row[3]} for row in c.fetchall()]
+    c.execute('SELECT room, game_name, fen, turn FROM saved_games WHERE username = ?', (username,))
+    games_list = [{'room': row[0], 'game_name': row[1], 'fen': row[2], 'turn': row[3]} for row in c.fetchall()]
     conn.close()
     emit('saved_games_list', {'games': games_list}, to=sid)
 
@@ -730,17 +665,29 @@ def on_load_game(data):
         return
     conn = sqlite3.connect(DATABASE_PATH)
     c = conn.cursor()
-    c.execute('SELECT room, board, turn FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
+    c.execute('SELECT room, fen, turn FROM saved_games WHERE username = ? AND game_name = ?', (username, game_name))
     result = c.fetchone()
     conn.close()
     if result:
-        room, board, turn = result
-        games[room] = {'board': json.loads(board), 'turn': turn, 'time_white': None, 'time_black': None}
+        room, fen, turn = result
+        board = chess.Board(fen)
+        board_state = [['.' for _ in range(8)] for _ in range(8)]
+        for square in chess.SQUARES:
+            piece = board.piece_at(square)
+            if piece:
+                row, col = 7 - (square // 8), square % 8
+                board_state[row][col] = piece.symbol()
+        games[room] = {
+            'chessboard': board,
+            'turn': turn,
+            'time_white': None,
+            'time_black': None
+        }
         players[room] = {sid: {'color': 'white', 'chosen_color': '#FFFFFF', 'username': username}}
         join_room(room)
         emit('game_loaded', {
             'room': room,
-            'board': json.loads(board),
+            'board': board_state,
             'turn': turn,
             'game_name': game_name
         }, to=sid)
@@ -801,12 +748,23 @@ def on_accept_conditions(data):
         players[room] = {}
     players[room][sid] = {'color': 'white' if len(players[room]) == 0 else 'black', 'chosen_color': '#FFFFFF', 'username': username}
     if len(players[room]) == 2:
-        board, turn = reset_board(room)
-        games[room] = {'board': board, 'turn': turn, 'time_white': None, 'time_black': None}
+        board = reset_board()
+        board_state = [['.' for _ in range(8)] for _ in range(8)]
+        for square in chess.SQUARES:
+            piece = board.piece_at(square)
+            if piece:
+                row, col = 7 - (square // 8), square % 8
+                board_state[row][col] = piece.symbol()
+        games[room] = {
+            'chessboard': board,
+            'turn': 'white',
+            'time_white': None,
+            'time_black': None
+        }
         player_colors = {players[room][s]['color']: players[room][s]['chosen_color'] for s in players[room]}
         socketio.emit('game_start', {
-            'board': board,
-            'turn': turn,
+            'board': board_state,
+            'turn': 'white',
             'time_white': None,
             'time_black': None,
             'playerColors': player_colors
