@@ -19,7 +19,7 @@ let level = 0;
 let username = null;
 let currentAvatar = null;
 let isBotGame = false;
-let gameType = 'chess'; // 'chess' o 'checkers'
+let gameType = 'chess';
 
 const socket = io(location.hostname === 'localhost' ? 'http://localhost:10000' : 'https://peonkingame.onrender.com');
 const chessboard = document.getElementById('chessboard');
@@ -244,7 +244,7 @@ function handleTouchEnd(event) {
             }
         } else {
             const piece = board[fromRow][fromCol];
-            if (piece.toLowerCase() === 'p' && ((myColor === 'white' && toRow === 0) || (myColor === 'black' && toRow === 7))) {
+            if (piece.toLowerCase() === 'p' && ((myColor === 'white' && row === 0) || (myColor === 'black' && row === 7))) {
                 document.getElementById('promotion-modal').style.display = 'flex';
                 return new Promise(resolve => {
                     window.selectPromotion = function(piece) {
@@ -324,6 +324,7 @@ function joinWaitlist() {
     roomSelection.style.display = 'none';
     document.getElementById('waitlist').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
+    document.getElementById('global-chat').style.display = 'block';
 }
 
 function goBackFromWaitlist() {
@@ -331,6 +332,7 @@ function goBackFromWaitlist() {
     document.getElementById('waitlist').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     roomSelection.style.display = 'block';
+    document.getElementById('global-chat').style.display = 'block';
 }
 
 function goBackFromPrivateChat() {
@@ -338,6 +340,7 @@ function goBackFromPrivateChat() {
     document.getElementById('private-chat').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
     roomSelection.style.display = 'block';
+    document.getElementById('global-chat').style.display = 'block';
     room = null;
 }
 
@@ -571,6 +574,7 @@ function goBack() {
     gameButtons.style.display = 'none';
     timers.style.display = 'none';
     savedGamesDiv.style.display = 'none';
+    document.getElementById('global-chat').style.display = 'block';
     stopTimer();
     room = null;
     board = null;
@@ -605,6 +609,8 @@ function logout() {
     roomSelection.style.display = 'none';
     document.getElementById('waitlist').style.display = 'none';
     document.getElementById('private-chat').style.display = 'none';
+    document.getElementById('global-chat').style.display = 'none';
+    document.getElementById('user-info').style.display = 'none';
     document.getElementById('neig-balance').textContent = '10000 Neig';
     document.getElementById('elo-level').textContent = 'ELO: 0 (Nivel 0)';
     goBack();
@@ -623,7 +629,9 @@ function register() {
                 currentAvatar = data.avatar;
                 document.getElementById('login-register').style.display = 'none';
                 document.querySelector('.container').style.display = 'flex';
-                roomSelection.style.display = 'block';
+                document.getElementById('game-selection').style.display = 'block';
+                document.getElementById('global-chat').style.display = 'block';
+                document.getElementById('user-info').style.display = 'flex';
                 socket.emit('join_user_room', { username });
                 socket.emit('get_user_data', { username });
             } else {
@@ -668,6 +676,8 @@ function setGameType(type) {
     localStorage.setItem('currentScreen', type === 'chess' ? 'chess-selection' : 'checkers-selection');
     document.getElementById('game-selection').style.display = 'none';
     roomSelection.style.display = 'block';
+    document.getElementById('global-chat').style.display = 'block';
+    document.getElementById('user-info').style.display = 'flex';
 }
 
 socket.on('connect', () => {
@@ -687,7 +697,10 @@ socket.on('login_success', data => {
     updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
     document.getElementById('login-register').style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
-    roomSelection.style.display = 'block';
+    document.getElementById('game-selection').style.display = 'block';
+    roomSelection.style.display = 'none';
+    document.getElementById('global-chat').style.display = 'block';
+    document.getElementById('user-info').style.display = 'flex';
     socket.emit('join_user_room', { username });
 });
 
@@ -722,6 +735,8 @@ socket.on('game_start', data => {
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
+    document.getElementById('global-chat').style.display = 'block';
+    document.getElementById('user-info').style.display = 'flex';
     initializeBoard(gameType === 'checkers');
     renderBoard();
     updateTimers();
@@ -819,7 +834,7 @@ socket.on('saved_games_list', data => {
 });
 
 socket.on('game_loaded', data => {
-    gameType = data.game_type || 'chess'; // Ajustado para soportar game_type
+    gameType = data.game_type || 'chess';
     board = data.board;
     turn = data.turn;
     room = data.room;
@@ -833,6 +848,8 @@ socket.on('game_loaded', data => {
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
     document.querySelector('.container').style.display = 'flex';
+    document.getElementById('global-chat').style.display = 'block';
+    document.getElementById('user-info').style.display = 'flex';
     initializeBoard(gameType === 'checkers');
     renderBoard();
     updateTimers();
@@ -874,6 +891,8 @@ socket.on('private_chat_start', data => {
     document.getElementById('waitlist').style.display = 'none';
     document.getElementById('private-chat').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
+    document.getElementById('global-chat').style.display = 'block';
+    document.getElementById('user-info').style.display = 'flex';
     document.getElementById('private-chat-messages').innerHTML = `<p>Conectado con ${data.opponent}</p>`;
 });
 
@@ -899,7 +918,7 @@ document.getElementById('register-form')?.addEventListener('submit', e => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    initializeBoard(false); // Inicializa como ajedrez por defecto
+    initializeBoard(false);
     if (username) socket.emit('get_user_data', { username });
 });
 
@@ -908,6 +927,8 @@ window.onload = () => {
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('login-register').style.display = 'block';
         document.querySelector('.container').style.display = 'none';
+        document.getElementById('global-chat').style.display = 'none';
+        document.getElementById('user-info').style.display = 'none';
         currentAvatar = '/static/default-avatar.png';
     }, 3000);
 };
