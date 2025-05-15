@@ -285,17 +285,17 @@ def register():
         c = conn.cursor()
         try:
             c.execute('INSERT INTO users (username, password, avatar) VALUES (?, ?, ?)', 
-                     (username, hashed_password, avatar_path))
+                      (username, hashed_password, avatar_path))
             c.execute('INSERT OR IGNORE INTO wallets (username, neig, elo, level) VALUES (?, 10000, 0, 0)', 
-                     (username,))
+                      (username,))
             conn.commit()
         except sqlite3.IntegrityError:
             conn.close()
             return jsonify({'success': False, 'message': 'El usuario ya existe'}), 400
         conn.close()
 
+        # Almacenar el username en la sesión de Flask
         session['username'] = username
-        sessions[request.sid] = username if hasattr(request, 'sid') else username
         return jsonify({'success': True, 'username': username, 'avatar': avatar_path})
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error al registrar: {str(e)}'}), 500
@@ -318,8 +318,8 @@ def login():
         conn.close()
 
         if result and bcrypt.checkpw(password.encode('utf-8'), result[0]):
+            # Almacenar el username en la sesión de Flask
             session['username'] = username
-            sessions[request.sid] = username if hasattr(request, 'sid') else username
             user_data = load_user_data(username)
             return jsonify({
                 'success': True,
@@ -338,14 +338,8 @@ def login():
 def check_session():
     """Verificar sesión activa."""
     try:
-        data = request.get_json()
-        if not data or 'username' not in data:
-            return jsonify({'success': False, 'message': 'Usuario requerido'}), 400
-
-        username = data['username']
-        sid = request.sid if hasattr(request, 'sid') else None
-
-        if username and (sid and sessions.get(sid) == username or session.get('username') == username):
+        username = session.get('username')
+        if username:
             user_data = load_user_data(username)
             conn = sqlite3.connect(DATABASE_PATH)
             c = conn.cursor()
@@ -384,7 +378,7 @@ def recover_password():
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         created_at = int(time.time())
         c.execute('INSERT OR REPLACE INTO recovery_codes (username, code, created_at) VALUES (?, ?, ?)', 
-                 (username, code, created_at))
+                  (username, code, created_at))
         conn.commit()
         conn.close()
         print(f"Código de recuperación para {username}: {code}")  # TODO: Enviar por email
@@ -425,29 +419,36 @@ def reset_password():
 def logout():
     """Cerrar sesión."""
     try:
-        sid = request.sid if hasattr(request, 'sid') else None
-        if sid and sid in sessions:
-            username = sessions[sid]
-            del sessions[sid]
-            if sid in online_players:
-                del online_players[sid]
-            if sid in available_players:
-                del available_players[sid]
-            for room in list(players.keys()):
-                if sid in players[room]:
-                    del players[room][sid]
-                    if not players[room]:
-                        del players[room]
-                        if room in games:
-                            del games[room]
-                    else:
-                        socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
+        username = session.get('username')
+        if username:
+            # Buscar y eliminar cualquier sid asociado con este username
+            sid_to_remove = None
+            for sid, stored_username in list(sessions.items()):
+                if stored_username == username:
+                    sid_to_remove = sid
                     break
-            socketio.emit('online_players_update', list(online_players.values()))
-            socketio.emit('waitlist_update', {
-                'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                           for s, info in available_players.items()]
-            })
+            if sid_to_remove:
+                del sessions[sid_to_remove]
+                if sid_to_remove in online_players:
+                    del online_players[sid_to_remove]
+                if sid_to_remove in available_players:
+                    del available_players[sid_to_remove]
+                for room in list(players.keys()):
+                    if sid_to_remove in players[room]:
+                        del players[room][sid_to_remove]
+                        if not players[room]:
+                            del players[room]
+                            if room in games:
+                                del games[room]
+                        else:
+                            socketio.emit('player_left', {'message': 'El oponente abandonó la partida'}, room=room)
+                        break
+                socketio.emit('online_players_update', list(online_players.values()))
+                socketio.emit('waitlist_update', {
+                    'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
+                                for s, info in available_players.items()]
+                })
+            # Limpiar la sesión de Flask
             session.pop('username', None)
         return jsonify({'success': True})
     except Exception as e:
@@ -535,7 +536,7 @@ def on_logout(data):
             socketio.emit('online_players_update', list(online_players.values()))
             socketio.emit('waitlist_update', {
                 'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                           for s, info in available_players.items()]
+                            for s, info in available_players.items()]
             })
             session.pop('username', None)
     except Exception as e:
@@ -545,7 +546,7 @@ def on_logout(data):
 def on_connect():
     """Manejar conexión de Socket.IO."""
     sid = request.sid
-    username = session.get('username') or sessions.get(sid)
+    username = session.get('username')
     if username:
         sessions[sid] = username
         conn = sqlite3.connect(DATABASE_PATH)
@@ -572,7 +573,7 @@ def on_disconnect():
             del available_players[sid]
             socketio.emit('waitlist_update', {
                 'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                           for s, info in available_players.items()]
+                            for s, info in available_players.items()]
             })
         for room in list(players.keys()):
             if sid in players[room]:
@@ -981,7 +982,7 @@ def on_resign(data):
                 'elo': user_data['elo'],
                 'level': user_data['level']
             }, to=sid)
-            emit('resigned', {
+            emit='resigned', {
                 'message': f'Abandonaste la partida contra Stockfish. Perdiste {elo_points} ELO y {neig_points} Neig.',
                 'elo': user_data['elo'],
                 'neig': user_data['neig'],
@@ -1177,7 +1178,7 @@ def on_join_waitlist(data):
         available_players[sid] = {'username': username, 'chosen_color': chosen_color, 'avatar': avatar}
         socketio.emit('waitlist_update', {
             'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                       for s, info in available_players.items()]
+                        for s, info in available_players.items()]
         })
 
 @socketio.on('leave_waitlist')
@@ -1188,7 +1189,7 @@ def on_leave_waitlist():
         del available_players[sid]
         socketio.emit('waitlist_update', {
             'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                       for s, info in available_players.items()]
+                        for s, info in available_players.items()]
         })
 
 @socketio.on('select_opponent')
@@ -1208,7 +1209,7 @@ def on_select_opponent(data):
         del available_players[opponent_sid]
         socketio.emit('waitlist_update', {
             'players': [{'sid': s, 'username': info['username'], 'chosen_color': info['chosen_color'], 'avatar': info['avatar']} 
-                       for s, info in available_players.items()]
+                        for s, info in available_players.items()]
         })
 
 @socketio.on('private_message')
