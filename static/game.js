@@ -24,12 +24,15 @@ let gameType = 'chess';
 const socket = io(location.hostname === 'localhost' ? 'http://localhost:10000' : 'https://peonkingame.onrender.com');
 const chessboard = document.getElementById('chessboard');
 const checkersboard = document.getElementById('checkersboard');
-const roomSelection = document.getElementById('room-selection');
+const roomSelection = document.querySelector('.container #room-selection');
+const checkersRoomSelection = document.querySelector('.checkers-container #room-selection');
 const chat = document.getElementById('chat');
 const gameButtons = document.getElementById('game-buttons');
 const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
 const promotionModal = document.getElementById('promotion-modal');
+const globalChat = document.getElementById('global-chat-container');
+const userInfo = document.getElementById('user-info');
 
 function initializeBoard(isCheckers) {
     const targetBoard = isCheckers ? checkersboard : chessboard;
@@ -154,7 +157,6 @@ function handleSquareClick(event) {
     if (!square) return;
     const row = parseInt(square.dataset.row);
     const col = parseInt(square.dataset.col);
-    const piece = board[row][col];
     const position = String.fromCharCode(97 + col) + (8 - row);
 
     if (gameType === 'checkers') {
@@ -192,10 +194,10 @@ function handleSquareClick(event) {
             const to = position;
             const piece = board[fromRow][fromCol];
             if (piece.toLowerCase() === 'p' && ((myColor === 'white' && row === 0) || (myColor === 'black' && row === 7))) {
-                document.getElementById('promotion-modal').style.display = 'flex';
+                promotionModal.style.display = 'flex';
                 return new Promise(resolve => {
                     window.selectPromotion = function(piece) {
-                        document.getElementById('promotion-modal').style.display = 'none';
+                        promotionModal.style.display = 'none';
                         socket.emit('move', { from, to, room, promotion: piece });
                         resolve();
                     };
@@ -245,10 +247,10 @@ function handleTouchEnd(event) {
         } else {
             const piece = board[fromRow][fromCol];
             if (piece.toLowerCase() === 'p' && ((myColor === 'white' && row === 0) || (myColor === 'black' && row === 7))) {
-                document.getElementById('promotion-modal').style.display = 'flex';
+                promotionModal.style.display = 'flex';
                 return new Promise(resolve => {
                     window.selectPromotion = function(piece) {
-                        document.getElementById('promotion-modal').style.display = 'none';
+                        promotionModal.style.display = 'none';
                         socket.emit('move', { from, to, room, promotion: piece });
                         resolve();
                     };
@@ -271,10 +273,12 @@ function openBotConfigModal() {
         alert('Jugar contra bot no está disponible para damas.');
         return;
     }
-    document.getElementById('bot-config-modal').style.display = 'flex';
+    localStorage.setItem('currentScreen', 'chess-bot-config');
+    document.getElementById('bot-config-modal').style.display = 'block';
 }
 
 function closeBotConfigModal() {
+    localStorage.setItem('currentScreen', 'chess');
     document.getElementById('bot-config-modal').style.display = 'none';
 }
 
@@ -288,6 +292,8 @@ function startBotGame() {
     chessboard.style.display = 'grid';
     gameButtons.style.display = 'block';
     timers.style.display = 'block';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
     isBotGame = true;
 }
 
@@ -296,9 +302,10 @@ function joinRoom() {
         alert('Por favor, iniciá sesión primero.');
         return;
     }
-    room = document.getElementById('room-id').value.trim();
-    const timer = document.getElementById('timer-select').value;
-    const color = document.getElementById('color-select').value;
+    const activeRoomSelection = gameType === 'chess' ? roomSelection : checkersRoomSelection;
+    room = activeRoomSelection.querySelector('#room-id').value.trim();
+    const timer = activeRoomSelection.querySelector('#timer-select').value;
+    const color = activeRoomSelection.querySelector('#color-select').value;
     if (!room) {
         alert('Por favor, ingresá un ID de sala.');
         return;
@@ -319,28 +326,34 @@ function joinWaitlist() {
         alert('Por favor, iniciá sesión primero.');
         return;
     }
-    const color = document.getElementById('color-select').value;
+    const activeRoomSelection = gameType === 'chess' ? roomSelection : checkersRoomSelection;
+    const color = activeRoomSelection.querySelector('#color-select').value;
     socket.emit('join_waitlist', { color, avatar: currentAvatar });
     roomSelection.style.display = 'none';
-    document.getElementById('waitlist').style.display = 'block';
+    checkersRoomSelection.style.display = 'none';
     document.querySelector('.container').style.display = 'none';
-    document.getElementById('global-chat').style.display = 'block';
+    document.querySelector('.checkers-container').style.display = 'none';
+    document.getElementById('waitlist').style.display = 'block';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
 }
 
 function goBackFromWaitlist() {
     socket.emit('leave_waitlist');
     document.getElementById('waitlist').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    roomSelection.style.display = 'block';
-    document.getElementById('global-chat').style.display = 'block';
+    document.querySelector(gameType === 'chess' ? '.container' : '.checkers-container').style.display = 'flex';
+    (gameType === 'chess' ? roomSelection : checkersRoomSelection).style.display = 'block';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
 }
 
 function goBackFromPrivateChat() {
     socket.emit('leave_private_chat', { room });
     document.getElementById('private-chat').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    roomSelection.style.display = 'block';
-    document.getElementById('global-chat').style.display = 'block';
+    document.querySelector(gameType === 'chess' ? '.container' : '.checkers-container').style.display = 'flex';
+    (gameType === 'chess' ? roomSelection : checkersRoomSelection).style.display = 'block';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
     room = null;
 }
 
@@ -352,7 +365,7 @@ function sendGlobalChatMessage() {
     const input = document.getElementById('global-chat-input');
     const message = input.value.trim();
     if (message) {
-        socket.emit('global_chat_message', { message: message });
+        socket.emit('global_chat_message', { message });
         input.value = '';
     }
 }
@@ -364,8 +377,6 @@ socket.on('new_global_message', data => {
         messageElement.textContent = `[${data.timestamp}] ${data.username}: ${data.message}`;
         chat.appendChild(messageElement);
         chat.scrollTop = chat.scrollHeight;
-    } else {
-        console.error('Elemento global-chat-messages no encontrado');
     }
 });
 
@@ -382,7 +393,6 @@ socket.on('bot_chat_message', data => {
 });
 
 socket.on('error', data => {
-    console.log('Error recibido:', data.message);
     alert(data.message);
 });
 
@@ -524,7 +534,7 @@ function updateUserData(data) {
     neigBalance = data.neig;
     eloPoints = data.elo;
     level = data.level;
-    document.getElementById('neig-balance').textContent = `${neigBalance} Neig`;
+    document.getElementById('neig-balance').innerHTML = `${neigBalance} <img src="/static/neig.png" alt="Neig">`;
     document.getElementById('elo-level').textContent = `ELO: ${eloPoints} (Nivel ${level})`;
 }
 
@@ -566,15 +576,17 @@ function goBack() {
     if (room) {
         socket.emit('leave', { room });
     }
-    roomSelection.style.display = 'block';
-    document.querySelector('.container').style.display = 'flex';
+    document.querySelector('.container').style.display = 'none';
+    document.querySelector('.checkers-container').style.display = 'none';
+    document.getElementById('game-selection').style.display = 'flex';
     chessboard.style.display = 'none';
     checkersboard.style.display = 'none';
     chat.style.display = 'none';
     gameButtons.style.display = 'none';
     timers.style.display = 'none';
     savedGamesDiv.style.display = 'none';
-    document.getElementById('global-chat').style.display = 'block';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
     stopTimer();
     room = null;
     board = null;
@@ -593,68 +605,162 @@ function selectOpponent(opponentSid) {
 }
 
 function login(usernameInput, password) {
-    socket.emit('login', { username: usernameInput, password });
+    fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: usernameInput, password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            username = data.username;
+            currentAvatar = data.avatar;
+            localStorage.setItem('user', username);
+            localStorage.setItem('currentScreen', 'game-selection');
+            document.getElementById('login-register').style.display = 'none';
+            document.getElementById('game-selection').style.display = 'flex';
+            globalChat.style.display = 'block';
+            userInfo.style.display = 'block';
+            socket.emit('join_user_room', { username });
+            socket.emit('get_user_data', { username });
+        } else {
+            document.getElementById('login-error').textContent = data.message;
+        }
+    });
 }
 
 function logout() {
     if (!username) return;
-    socket.emit('logout', { username });
-    username = null;
-    currentAvatar = null;
-    neigBalance = 10000;
-    eloPoints = 0;
-    level = 0;
-    document.getElementById('login-register').style.display = 'block';
-    document.querySelector('.container').style.display = 'none';
-    roomSelection.style.display = 'none';
-    document.getElementById('waitlist').style.display = 'none';
-    document.getElementById('private-chat').style.display = 'none';
-    document.getElementById('global-chat').style.display = 'none';
-    document.getElementById('user-info').style.display = 'none';
-    document.getElementById('neig-balance').textContent = '10000 Neig';
-    document.getElementById('elo-level').textContent = 'ELO: 0 (Nivel 0)';
-    goBack();
-    stopVideoCall();
-    socket.disconnect();
-    socket.connect();
+    fetch('/logout', { method: 'POST' })
+    .then(() => {
+        socket.emit('logout', { username });
+        username = null;
+        currentAvatar = null;
+        neigBalance = 10000;
+        eloPoints = 0;
+        level = 0;
+        localStorage.removeItem('user');
+        localStorage.removeItem('currentScreen');
+        document.getElementById('login-register').style.display = 'flex';
+        document.querySelector('.container').style.display = 'none';
+        document.querySelector('.checkers-container').style.display = 'none';
+        document.getElementById('game-selection').style.display = 'none';
+        document.getElementById('waitlist').style.display = 'none';
+        document.getElementById('private-chat').style.display = 'none';
+        globalChat.style.display = 'none';
+        userInfo.style.display = 'none';
+        document.getElementById('neig-balance').innerHTML = '10000 <img src="/static/neig.png" alt="Neig">';
+        document.getElementById('elo-level').textContent = 'ELO: 0 (Nivel 0)';
+        goBack();
+        stopVideoCall();
+        socket.disconnect();
+        socket.connect();
+    });
 }
 
 function register() {
     const formData = new FormData(document.getElementById('register-form'));
-    fetch('/register', { method: 'POST', body: formData })
+    fetch('/register', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            username = data.username;
+            currentAvatar = data.avatar;
+            localStorage.setItem('user', username);
+            localStorage.setItem('currentScreen', 'game-selection');
+            document.getElementById('login-register').style.display = 'none';
+            document.getElementById('game-selection').style.display = 'flex';
+            globalChat.style.display = 'block';
+            userInfo.style.display = 'block';
+            socket.emit('join_user_room', { username });
+            socket.emit('get_user_data', { username });
+        } else {
+            document.getElementById('register-error').textContent = data.message;
+        }
+    });
+}
+
+function setGameType(type) {
+    gameType = type;
+    localStorage.setItem('currentScreen', type);
+    document.getElementById('game-selection').style.display = 'none';
+    const container = document.querySelector('.container');
+    const checkersContainer = document.querySelector('.checkers-container');
+    if (type === 'chess') {
+        container.style.display = 'flex';
+        checkersContainer.style.display = 'none';
+        roomSelection.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+        checkersContainer.style.display = 'flex';
+        checkersRoomSelection.style.display = 'block';
+    }
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
+}
+
+socket.on('connect', () => {
+    console.log('Conectado al servidor');
+    const user = localStorage.getItem('user');
+    if (user) {
+        fetch('/check_session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user })
+        })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                username = data.username;
-                currentAvatar = data.avatar;
+            if (data.authenticated) {
+                username = user;
                 document.getElementById('login-register').style.display = 'none';
-                document.querySelector('.container').style.display = 'flex';
-                document.getElementById('game-selection').style.display = 'block';
-                document.getElementById('global-chat').style.display = 'block';
-                document.getElementById('user-info').style.display = 'flex';
+                const currentScreen = localStorage.getItem('currentScreen');
+                if (currentScreen === 'chess') {
+                    setGameType('chess');
+                } else if (currentScreen === 'checkers') {
+                    setGameType('checkers');
+                } else if (currentScreen === 'chess-bot-config') {
+                    setGameType('chess');
+                    openBotConfigModal();
+                } else {
+                    document.getElementById('game-selection').style.display = 'flex';
+                }
                 socket.emit('join_user_room', { username });
                 socket.emit('get_user_data', { username });
             } else {
-                document.getElementById('register-error').textContent = data.error;
+                localStorage.removeItem('user');
+                localStorage.removeItem('currentScreen');
+                document.getElementById('login-register').style.display = 'flex';
+                globalChat.style.display = 'none';
+                userInfo.style.display = 'none';
             }
-        })
-        .catch(error => {
-            document.getElementById('register-error').textContent = 'Error en el registro. Intenta de nuevo.';
         });
-}
-
-function previewAvatar(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('avatar-preview').src = e.target.result;
-        };
-        reader.readAsDataURL(file);
     }
-}
+});
 
-function renderOnlinePlayers(players) {
+socket.on('login_success', data => {
+    username = data.username;
+    currentAvatar = data.avatar;
+    neigBalance = data.neig;
+    eloPoints = data.elo;
+    level = data.level;
+    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
+    localStorage.setItem('user', username);
+    localStorage.setItem('currentScreen', 'game-selection');
+    document.getElementById('login-register').style.display = 'none';
+    document.getElementById('game-selection').style.display = 'flex';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
+    socket.emit('join_user_room', { username });
+});
+
+socket.on('login_error', data => {
+    document.getElementById('login-error').textContent = data.error || data.message;
+});
+
+socket.on('online_players_update', players => {
     const onlineDiv = document.getElementById('online-players');
     onlineDiv.innerHTML = '<h3>Jugadores en Línea</h3>';
     players.forEach(player => {
@@ -667,244 +773,213 @@ function renderOnlinePlayers(players) {
         img.onerror = () => img.src = '/static/default-avatar.png';
         p.appendChild(img);
         p.appendChild(document.createTextNode(player.username));
+        p.style.cursor = 'pointer';
+        p.onclick = () => selectOpponent(player.sid);
         onlineDiv.appendChild(p);
     });
-}
-
-function setGameType(type) {
-    gameType = type;
-    localStorage.setItem('currentScreen', type === 'chess' ? 'chess-selection' : 'checkers-selection');
-    document.getElementById('game-selection').style.display = 'none';
-    roomSelection.style.display = 'block';
-    document.getElementById('global-chat').style.display = 'block';
-    document.getElementById('user-info').style.display = 'flex';
-}
-
-socket.on('connect', () => {
-    console.log('Conectado al servidor');
-    if (username) {
-        socket.emit('join_user_room', { username });
-        socket.emit('get_user_data', { username });
-    }
 });
 
-socket.on('login_success', data => {
-    username = data.username;
-    currentAvatar = data.avatar;
-    neigBalance = data.neig;
-    eloPoints = data.elo;
-    level = data.level;
-    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
-    document.getElementById('login-register').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    document.getElementById('game-selection').style.display = 'block';
-    roomSelection.style.display = 'none';
-    document.getElementById('global-chat').style.display = 'block';
-    document.getElementById('user-info').style.display = 'flex';
-    socket.emit('join_user_room', { username });
+socket.on('user_data', data => {
+    updateUserData(data);
 });
 
-socket.on('login_error', data => {
-    document.getElementById('login-error').textContent = data.error || data.message;
-});
-
-socket.on('online_players_update', players => {
-    renderOnlinePlayers(players);
-});
-
-socket.on('color_assigned', data => {
-    myColor = data.color;
-    playerColors[data.color] = data.chosenColor;
-});
-
-socket.on('game_start', data => {
-    gameType = data.game_type || 'chess';
+socket.on('join_success', data => {
     room = data.room;
-    isBotGame = data.is_bot_game || false;
+    myColor = data.color;
+    playerColors = data.player_colors || { white: '#FFFFFF', black: '#000000' };
+    timeWhite = data.timer;
+    timeBlack = data.timer;
     board = data.board;
     turn = data.turn;
-    timeWhite = data.time_white;
-    timeBlack = data.time_black;
-    playerColors = data.playerColors;
-    previousBoard = JSON.parse(JSON.stringify(board));
-    roomSelection.style.display = 'none';
-    chessboard.style.display = gameType === 'chess' ? 'grid' : 'none';
-    checkersboard.style.display = gameType === 'checkers' ? 'grid' : 'none';
+    const targetBoard = gameType === 'chess' ? chessboard : checkersboard;
+    const activeRoomSelection = gameType === 'chess' ? roomSelection : checkersRoomSelection;
+    const container = gameType === 'chess' ? document.querySelector('.container') : document.querySelector('.checkers-container');
+    
+    container.style.display = 'flex';
+    activeRoomSelection.style.display = 'none';
+    targetBoard.style.display = 'grid';
     chat.style.display = 'block';
     gameButtons.style.display = 'block';
     timers.style.display = 'block';
-    savedGamesDiv.style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    document.getElementById('global-chat').style.display = 'block';
-    document.getElementById('user-info').style.display = 'flex';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
+    
     initializeBoard(gameType === 'checkers');
     renderBoard();
     updateTimers();
-    if (timeWhite !== null && timeBlack !== null) startTimer();
+    if (data.timer > 0) startTimer();
 });
 
-socket.on('update_board', data => {
+socket.on('game_state', data => {
     board = data.board;
     turn = data.turn;
-    previousBoard = JSON.parse(JSON.stringify(board));
-    selectedSquare = null;
-    renderBoard();
-});
-
-socket.on('timer_update', data => {
     timeWhite = data.time_white;
     timeBlack = data.time_black;
-    lastUpdateTime = Date.now();
+    renderBoard();
     updateTimers();
+    if (data.timer > 0 && turn) startTimer();
+    else stopTimer();
 });
 
-socket.on('new_message', data => {
-    const messages = document.getElementById('chat-messages');
-    const message = document.createElement('div');
-    message.textContent = `${data.color}: ${data.message}`;
-    messages.appendChild(message);
-    messages.scrollTop = messages.scrollHeight;
+socket.on('move', data => {
+    board = data.board;
+    turn = data.turn;
+    timeWhite = data.time_white;
+    timeBlack = data.time_black;
+    renderBoard();
+    updateTimers();
+    if (data.timer > 0) startTimer();
+});
+
+socket.on('game_over', data => {
+    stopTimer();
+    alert(`Juego terminado: ${data.result}`);
+    if (data.elo) {
+        eloPoints = data.elo;
+        level = data.level;
+        updateUserData({ neig: neigBalance, elo: eloPoints, level });
+    }
+    goBack();
+});
+
+socket.on('chat_message', data => {
+    const chatMessages = document.getElementById('chat-messages');
+    const messageElement = document.createElement('div');
+    messageElement.textContent = `[${data.timestamp}] ${data.username}: ${data.message}`;
+    chatMessages.appendChild(messageElement);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
 socket.on('audio_message', data => {
-    const messages = document.getElementById('chat-messages');
-    const messageDiv = document.createElement('div');
-    if (data.color) messageDiv.textContent = `${data.color}: `;
-    const audio = document.createElement('audio');
-    audio.controls = true;
-    audio.src = `data:audio/webm;base64,${data.audio}`;
-    messageDiv.appendChild(audio);
-    messages.appendChild(messageDiv);
-    messages.scrollTop = messages.scrollHeight;
+    const chatMessages = document.getElementById('chat-messages');
+    const audioElement = document.createElement('audio');
+    audioElement.controls = true;
+    audioElement.src = `data:audio/webm;base64,${data.audio}`;
+    const messageElement = document.createElement('div');
+    messageElement.textContent = `[${data.timestamp}] ${data.username}: `;
+    messageElement.appendChild(audioElement);
+    chatMessages.appendChild(messageElement);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
 socket.on('video_signal', data => {
-    if (!peer) {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                localStream = stream;
-                document.getElementById('local-video').srcObject = stream;
-                document.getElementById('local-video').style.display = 'block';
-                document.getElementById('start-video').style.display = 'none';
-                document.getElementById('stop-video').style.display = 'inline';
-                peer = new SimplePeer({ stream });
-                peer.on('signal', signal => socket.emit('video_signal', { room, signal }));
-                peer.on('stream', remoteStream => {
-                    document.getElementById('remote-video').srcObject = remoteStream;
-                    document.getElementById('remote-video').style.display = 'block';
-                });
-                peer.signal(data.signal);
-            });
-    } else {
+    if (peer) {
         peer.signal(data.signal);
     }
 });
 
-socket.on('video_stop', () => stopVideoCall());
-
-socket.on('player_left', data => {
-    alert(data.message);
-    goBack();
+socket.on('video_stop', () => {
+    stopVideoCall();
 });
 
-socket.on('game_over', data => {
-    alert(`${data.message} Ganaste ${data.elo_points || 0} ELO y ${data.neig_points || 0} Neig.`);
-    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
-    goBack();
-});
-
-socket.on('check', data => alert(data.message));
-
-socket.on('resigned', data => {
-    alert(data.message);
-    updateUserData({ neig: data.neig, elo: data.elo, level: data.level });
-    goBack();
-});
-
-socket.on('game_saved', data => alert(data.message));
-
-socket.on('saved_games_list', data => {
+socket.on('saved_games', data => {
     savedGamesDiv.innerHTML = '';
     data.games.forEach(game => {
         const button = document.createElement('button');
-        button.textContent = `${game.game_name} (Sala: ${game.room})`;
-        button.onclick = () => loadGame(game.game_name);
+        button.textContent = game.name;
+        button.onclick = () => loadGame(game.name);
         savedGamesDiv.appendChild(button);
     });
 });
 
 socket.on('game_loaded', data => {
-    gameType = data.game_type || 'chess';
+    room = data.room;
     board = data.board;
     turn = data.turn;
-    room = data.room;
-    timeWhite = null;
-    timeBlack = null;
-    roomSelection.style.display = 'none';
-    chessboard.style.display = gameType === 'chess' ? 'grid' : 'none';
-    checkersboard.style.display = gameType === 'checkers' ? 'grid' : 'none';
+    myColor = data.color;
+    timeWhite = data.timer;
+    timeBlack = data.timer;
+    const targetBoard = gameType === 'chess' ? chessboard : checkersboard;
+    const activeRoomSelection = gameType === 'chess' ? roomSelection : checkersRoomSelection;
+    const container = gameType === 'chess' ? document.querySelector('.container') : document.querySelector('.checkers-container');
+    
+    container.style.display = 'flex';
+    activeRoomSelection.style.display = 'none';
+    targetBoard.style.display = 'grid';
     chat.style.display = 'block';
     gameButtons.style.display = 'block';
     timers.style.display = 'block';
     savedGamesDiv.style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    document.getElementById('global-chat').style.display = 'block';
-    document.getElementById('user-info').style.display = 'flex';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
+    
     initializeBoard(gameType === 'checkers');
     renderBoard();
     updateTimers();
-    alert(`Partida "${data.game_name}" cargada exitosamente en la sala ${room}`);
+    if (data.timer > 0) startTimer();
 });
-
-socket.on('user_data_update', data => {
-    updateUserData(data);
-});
-
-socket.on('waiting_opponent', data => alert(data.message));
 
 socket.on('waitlist_update', data => {
-    const waitlistDiv = document.getElementById('waitlist-players');
-    waitlistDiv.innerHTML = '';
-    if (data.players && data.players.length > 0) {
-        data.players.forEach(player => {
-            if (player.username !== username) {
-                const div = document.createElement('div');
-                div.className = 'player-item';
-                const img = document.createElement('img');
-                img.src = player.avatar || '/static/default-avatar.png';
-                img.onerror = () => img.src = '/static/default-avatar.png';
-                const span = document.createElement('span');
-                span.textContent = `${player.username} (${player.chosen_color})`;
-                div.appendChild(img);
-                div.appendChild(span);
-                div.onclick = () => selectOpponent(player.sid);
-                waitlistDiv.appendChild(div);
-            }
-        });
-    } else {
-        waitlistDiv.innerHTML = '<p>No hay jugadores disponibles.</p>';
-    }
+    const waitlistPlayers = document.getElementById('waitlist-players');
+    waitlistPlayers.innerHTML = '';
+    data.players.forEach(player => {
+        const div = document.createElement('div');
+        div.className = 'player-item';
+        const img = document.createElement('img');
+        img.src = player.avatar || '/static/default-avatar.png';
+        img.onerror = () => img.src = '/static/default-avatar.png';
+        div.appendChild(img);
+        div.appendChild(document.createTextNode(player.username));
+        div.onclick = () => selectOpponent(player.sid);
+        waitlistPlayers.appendChild(div);
+    });
 });
 
-socket.on('private_chat_start', data => {
+socket.on('private_chat', data => {
     room = data.room;
+    const container = document.querySelector('.container');
+    const checkersContainer = document.querySelector('.checkers-container');
+    container.style.display = 'none';
+    checkersContainer.style.display = 'none';
+    roomSelection.style.display = 'none';
+    checkersRoomSelection.style.display = 'none';
     document.getElementById('waitlist').style.display = 'none';
     document.getElementById('private-chat').style.display = 'block';
-    document.querySelector('.container').style.display = 'none';
-    document.getElementById('global-chat').style.display = 'block';
-    document.getElementById('user-info').style.display = 'flex';
-    document.getElementById('private-chat-messages').innerHTML = `<p>Conectado con ${data.opponent}</p>`;
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
+    document.getElementById('private-chat-messages').innerHTML = '';
 });
 
 socket.on('private_message', data => {
-    const messages = document.getElementById('private-chat-messages');
-    const message = document.createElement('div');
-    message.textContent = `${data.username}: ${data.message}`;
-    messages.appendChild(message);
-    messages.scrollTop = messages.scrollHeight;
+    const privateChatMessages = document.getElementById('private-chat-messages');
+    const messageElement = document.createElement('div');
+    messageElement.textContent = `[${data.timestamp}] ${data.username}: ${data.message}`;
+    privateChatMessages.appendChild(messageElement);
+    privateChatMessages.scrollTop = privateChatMessages.scrollHeight;
 });
 
-document.getElementById('login-form')?.addEventListener('submit', e => {
+socket.on('conditions_accepted', data => {
+    room = data.room;
+    myColor = data.color;
+    playerColors = data.player_colors || { white: '#FFFFFF', black: '#000000' };
+    timeWhite = data.timer;
+    timeBlack = data.timer;
+    board = data.board;
+    turn = data.turn;
+    const targetBoard = gameType === 'chess' ? chessboard : checkersboard;
+    const container = gameType === 'chess' ? document.querySelector('.container') : document.querySelector('.checkers-container');
+    
+    container.style.display = 'flex';
+    document.getElementById('private-chat').style.display = 'none';
+    targetBoard.style.display = 'grid';
+    chat.style.display = 'block';
+    gameButtons.style.display = 'block';
+    timers.style.display = 'block';
+    globalChat.style.display = 'block';
+    userInfo.style.display = 'block';
+    
+    initializeBoard(gameType === 'checkers');
+    renderBoard();
+    updateTimers();
+    if (data.timer > 0) startTimer();
+});
+
+socket.on('player_disconnected', () => {
+    alert('El otro jugador se ha desconectado.');
+    goBack();
+});
+
+document.getElementById('login-form').addEventListener('submit', e => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const usernameInput = formData.get('username');
@@ -912,23 +987,91 @@ document.getElementById('login-form')?.addEventListener('submit', e => {
     login(usernameInput, password);
 });
 
-document.getElementById('register-form')?.addEventListener('submit', e => {
+document.getElementById('register-form').addEventListener('submit', e => {
     e.preventDefault();
     register();
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-    initializeBoard(false);
-    if (username) socket.emit('get_user_data', { username });
+document.getElementById('recover-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const usernameInput = formData.get('username');
+    fetch('/recover_password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: usernameInput })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('recover-form').style.display = 'none';
+            document.getElementById('reset-form').style.display = 'block';
+        } else {
+            document.getElementById('recover-error').textContent = data.message;
+        }
+    });
 });
 
-window.onload = () => {
-    setTimeout(() => {
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('login-register').style.display = 'block';
-        document.querySelector('.container').style.display = 'none';
-        document.getElementById('global-chat').style.display = 'none';
-        document.getElementById('user-info').style.display = 'none';
-        currentAvatar = '/static/default-avatar.png';
-    }, 3000);
-};
+document.getElementById('reset-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const code = formData.get('code');
+    const newPassword = formData.get('new-password');
+    fetch('/reset_password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, new_password: newPassword })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hideRecoverPassword();
+        } else {
+            document.getElementById('reset-error').textContent = data.message;
+        }
+    });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loading-screen').style.display = 'none';
+    const user = localStorage.getItem('user');
+    if (user) {
+        fetch('/check_session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.authenticated) {
+                username = user;
+                document.getElementById('login-register').style.display = 'none';
+                const currentScreen = localStorage.getItem('currentScreen');
+                if (currentScreen === 'chess') {
+                    setGameType('chess');
+                } else if (currentScreen === 'checkers') {
+                    setGameType('checkers');
+                } else if (currentScreen === 'chess-bot-config') {
+                    setGameType('chess');
+                    openBotConfigModal();
+                } else {
+                    document.getElementById('game-selection').style.display = 'flex';
+                }
+                globalChat.style.display = 'block';
+                userInfo.style.display = 'block';
+                socket.emit('join_user_room', { username });
+                socket.emit('get_user_data', { username });
+            } else {
+                localStorage.removeItem('user');
+                localStorage.removeItem('currentScreen');
+                document.getElementById('login-register').style.display = 'flex';
+                globalChat.style.display = 'none';
+                userInfo.style.display = 'none';
+            }
+        });
+    } else {
+        document.getElementById('login-register').style.display = 'flex';
+        globalChat.style.display = 'none';
+        userInfo.style.display = 'none';
+    }
+});
