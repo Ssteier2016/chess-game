@@ -16,6 +16,9 @@
             overflow-y: auto;
             min-height: 100vh;
             box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
         #loading-screen {
             position: fixed;
@@ -583,8 +586,6 @@
             color: #ff4040;
             font-size: 0.9em;
         }
-
-        /* Media Queries para móviles (pantallas < 768px) */
         @media (max-width: 768px) {
             body {
                 overflow-y: auto;
@@ -676,8 +677,6 @@
                 max-width: 300px;
             }
         }
-
-        /* Media Queries para escritorio (pantallas >= 768px) */
         @media (min-width: 768px) {
             #chessboard, #checkersboard {
                 grid-template-columns: repeat(8, 50px);
@@ -764,11 +763,6 @@
     <div class="container">
         <img id="logo" src="/static/rey.png" alt="Logo Rey">
         <h1>Peón KinGame - Ajedrez</h1>
-        <div id="user-info">
-            <p id="neig-balance">10000 <img src="/static/neig.png" alt="Neig"></p>
-            <p id="elo-level">ELO: 0 (Nivel 0)</p>
-            <button onclick="logout()">Cerrar Sesión</button>
-        </div>
         <div id="room-selection">
             <h2>Unirse a una Sala</h2>
             <input id="room-id" type="text" placeholder="ID de la sala">
@@ -843,11 +837,6 @@
     <div class="checkers-container">
         <img id="logo" src="/static/reina.png" alt="Logo Reina">
         <h1>Peón KinGame - Damas</h1>
-        <div id="user-info">
-            <p id="neig-balance">10000 <img src="/static/neig.png" alt="Neig"></p>
-            <p id="elo-level">ELO: 0 (Nivel 0)</p>
-            <button onclick="logout()">Cerrar Sesión</button>
-        </div>
         <div id="room-selection">
             <h2>Unirse a una Sala</h2>
             <input id="room-id" type="text" placeholder="ID de la sala">
@@ -908,44 +897,20 @@
         <button onclick="acceptConditions()">Aceptar Condiciones</button>
         <button onclick="goBackFromPrivateChat()">Volver</button>
     </div>
+    <div id="user-info">
+        <p id="neig-balance">10000 <img src="/static/neig.png" alt="Neig"></p>
+        <p id="elo-level">ELO: 0 (Nivel 0)</p>
+        <button onclick="logout()">Cerrar Sesión</button>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/simple-peer@9.11.1/simple-peer.min.js"></script>
     <script src="/static/game.js"></script>
     <script>
-        // Funcionalidad para abrir el modal de configuración del bot
-        function openBotConfigModal() {
-            localStorage.setItem('currentScreen', 'chess-bot-config');
-            document.getElementById('bot-config-modal').style.display = 'block';
-        }
-
-        // Funcionalidad para cerrar el modal de configuración del bot
-        function closeBotConfigModal() {
-            localStorage.setItem('currentScreen', 'chess');
-            document.getElementById('bot-config-modal').style.display = 'none';
-        }
-
-        // Funcionalidad para seleccionar el juego
-        function selectGame(game) {
-            localStorage.setItem('currentScreen', game);
-            document.getElementById('game-selection').style.display = 'none';
-            if (game === 'chess') {
-                document.querySelector('.container').style.display = 'flex';
-                document.getElementById('room-selection').style.display = 'block';
-                document.getElementById('global-chat-container').style.display = 'block';
-            } else if (game === 'checkers') {
-                document.querySelector('.checkers-container').style.display = 'flex';
-                document.querySelector('.checkers-container #room-selection').style.display = 'block';
-                document.getElementById('global-chat-container').style.display = 'block';
-            }
-        }
-
-        // Funcionalidad para mostrar el formulario de recuperación
         function showRecoverPassword() {
             document.getElementById('login-register').style.display = 'none';
             document.getElementById('recover-password').style.display = 'block';
         }
 
-        // Funcionalidad para volver al login
         function hideRecoverPassword() {
             document.getElementById('recover-password').style.display = 'none';
             document.getElementById('login-register').style.display = 'flex';
@@ -953,171 +918,48 @@
             document.getElementById('reset-form').style.display = 'none';
         }
 
-        // Controlar visibilidad del chat global
+        function previewAvatar(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('avatar-preview').src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function selectGame(game) {
+            setGameType(game);
+        }
+
         function updateGlobalChatVisibility() {
             const chessboard = document.getElementById('chessboard');
             const checkersboard = document.getElementById('checkersboard');
             const roomSelection = document.querySelector('.container #room-selection');
             const checkersRoomSelection = document.querySelector('.checkers-container #room-selection');
+            const waitlist = document.getElementById('waitlist');
+            const privateChat = document.getElementById('private-chat');
             const globalChat = document.getElementById('global-chat-container');
-            
+
             if ((roomSelection && roomSelection.style.display === 'block') ||
                 (checkersRoomSelection && checkersRoomSelection.style.display === 'block') ||
                 (chessboard && chessboard.style.display === 'grid') ||
-                (checkersboard && checkersboard.style.display === 'grid')) {
+                (checkersboard && checkersboard.style.display === 'grid') ||
+                (waitlist && waitlist.style.display === 'block') ||
+                (privateChat && privateChat.style.display === 'block')) {
                 globalChat.style.display = 'block';
             } else {
                 globalChat.style.display = 'none';
             }
         }
 
-        // Restaurar estado al cargar la página
         document.addEventListener('DOMContentLoaded', () => {
-            const user = localStorage.getItem('user');
-            const currentScreen = localStorage.getItem('currentScreen');
-            
-            if (user) {
-                // Verificar sesión en el servidor
-                fetch('/check_session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: user })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.authenticated) {
-                        document.getElementById('login-register').style.display = 'none';
-                        if (currentScreen === 'chess') {
-                            selectGame('chess');
-                        } else if (currentScreen === 'checkers') {
-                            selectGame('checkers');
-                        } else if (currentScreen === 'chess-bot-config') {
-                            selectGame('chess');
-                            openBotConfigModal();
-                        } else {
-                            document.getElementById('game-selection').style.display = 'flex';
-                        }
-                    } else {
-                        localStorage.removeItem('user');
-                        localStorage.removeItem('currentScreen');
-                        document.getElementById('login-register').style.display = 'flex';
-                    }
-                });
-            } else {
-                document.getElementById('login-register').style.display = 'flex';
-            }
-
             updateGlobalChatVisibility();
         });
 
-        // Observar cambios en el DOM para el chat global
         const observer = new MutationObserver(updateGlobalChatVisibility);
         observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-
-        // Manejar login
-        document.getElementById('login-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const username = formData.get('username');
-            const password = formData.get('password');
-            
-            fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    localStorage.setItem('user', username);
-                    localStorage.setItem('currentScreen', 'game-selection');
-                    document.getElementById('login-register').style.display = 'none';
-                    document.getElementById('game-selection').style.display = 'flex';
-                } else {
-                    document.getElementById('login-error').textContent = data.message;
-                }
-            });
-        });
-
-        // Manejar registro
-        document.getElementById('register-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            
-            fetch('/register', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    localStorage.setItem('user', formData.get('username'));
-                    localStorage.setItem('currentScreen', 'game-selection');
-                    document.getElementById('login-register').style.display = 'none';
-                    document.getElementById('game-selection').style.display = 'flex';
-                } else {
-                    document.getElementById('register-error').textContent = data.message;
-                }
-            });
-        });
-
-        // Manejar recuperación de contraseña
-        document.getElementById('recover-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const username = formData.get('username');
-            
-            fetch('/recover_password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('recover-form').style.display = 'none';
-                    document.getElementById('reset-form').style.display = 'block';
-                } else {
-                    document.getElementById('recover-error').textContent = data.message;
-                }
-            });
-        });
-
-        // Manejar cambio de contraseña
-        document.getElementById('reset-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const code = formData.get('code');
-            const newPassword = formData.get('new-password');
-            
-            fetch('/reset_password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, new_password: newPassword })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    hideRecoverPassword();
-                } else {
-                    document.getElementById('reset-error').textContent = data.message;
-                }
-            });
-        });
-
-        // Manejar logout
-        function logout() {
-            fetch('/logout', { method: 'POST' })
-            .then(() => {
-                localStorage.removeItem('user');
-                localStorage.removeItem('currentScreen');
-                document.querySelector('.container').style.display = 'none';
-                document.querySelector('.checkers-container').style.display = 'none';
-                document.getElementById('game-selection').style.display = 'none';
-                document.getElementById('login-register').style.display = 'flex';
-                document.getElementById('global-chat-container').style.display = 'none';
-            });
-        }
     </script>
 </body>
 </html>
