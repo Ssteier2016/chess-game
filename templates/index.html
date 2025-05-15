@@ -19,6 +19,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
         }
         #loading-screen {
             position: fixed;
@@ -54,7 +55,12 @@
             align-items: center;
             position: relative;
             box-sizing: border-box;
-            min-height: calc(100vh - 40px);
+            min-height: calc(100vh - 140px); /* Ajustado para dejar espacio al chat global */
+            width: 100%;
+        }
+        #logo {
+            max-width: 60px; /* Reducido para que el logo sea más pequeño */
+            height: auto;
         }
         #game-selection {
             position: fixed;
@@ -114,6 +120,7 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            flex-direction: column; /* Asegura centrado vertical */
         }
         .auth-container {
             background: #4a2c1a;
@@ -124,6 +131,7 @@
             width: 90%;
             max-width: 350px;
             box-sizing: border-box;
+            margin: auto; /* Centrado adicional */
         }
         .auth-container h2 {
             margin: 0 0 15px;
@@ -400,18 +408,17 @@
             cursor: pointer;
         }
         #online-players {
-            position: fixed;
-            top: 10px;
-            left: 10px;
             background: #4a2c1a;
             border: 2px solid #8b5a2b;
             padding: 10px;
             color: #d4af37;
-            width: 200px;
+            width: 90%;
+            max-width: 300px;
             max-height: 200px;
             overflow-y: auto;
             z-index: 900;
             box-sizing: border-box;
+            margin: 10px auto; /* Centrado en móvil */
         }
         #online-players img {
             vertical-align: middle;
@@ -433,7 +440,6 @@
             font-family: 'Roboto', sans-serif;
             z-index: 1000;
             box-sizing: border-box;
-            display: none;
         }
         #global-chat-messages {
             height: 120px;
@@ -548,23 +554,22 @@
             z-index: 900;
         }
         #user-info {
-            position: fixed;
-            top: 10px;
-            right: 10px;
             background: #4a2c1a;
             padding: 10px;
             border: 2px solid #8b5a2b;
             border-radius: 5px;
             z-index: 900;
-            width: 180px;
+            width: 90%;
+            max-width: 300px;
             box-sizing: border-box;
-            text-align: right;
+            text-align: center;
+            margin: 10px auto; /* Centrado en móvil */
         }
         #user-info p {
             margin: 5px 0;
             display: flex;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: center; /* Centrado en móvil */
         }
         #user-info img {
             width: 20px;
@@ -589,14 +594,16 @@
         @media (max-width: 768px) {
             body {
                 overflow-y: auto;
+                align-items: flex-start; /* Evita centrado vertical en móvil */
             }
             .container, .checkers-container {
-                margin: 10px auto 80px;
+                margin: 10px auto 120px; /* Espacio para chat global */
                 padding: 10px;
                 max-width: 100%;
+                min-height: auto; /* Permite deslizamiento */
             }
             #logo {
-                max-width: 100px;
+                max-width: 50px; /* Logo más pequeño en móvil */
             }
             #chessboard, #checkersboard {
                 grid-template-columns: repeat(8, 35px);
@@ -628,6 +635,8 @@
             #global-chat-container {
                 width: 90%;
                 max-width: 280px;
+                bottom: 0; /* Fijo en la parte inferior */
+                margin-bottom: 10px;
             }
             #global-chat-messages {
                 height: 100px;
@@ -640,6 +649,7 @@
                 width: 120px;
                 height: 80px;
                 margin: 5px auto;
+                position: static; /* Evita superposición en móvil */
             }
             #game-buttons button {
                 padding: 6px 10px;
@@ -704,6 +714,23 @@
             }
             #global-chat-container {
                 max-width: 400px;
+                bottom: 10px; /* Fijo en escritorio */
+            }
+            #online-players {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                width: 200px;
+            }
+            #user-info {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 180px;
+                text-align: right;
+            }
+            #user-info p {
+                justify-content: flex-end;
             }
         }
     </style>
