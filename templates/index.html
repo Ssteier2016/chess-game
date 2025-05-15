@@ -55,11 +55,11 @@
             align-items: center;
             position: relative;
             box-sizing: border-box;
-            min-height: calc(100vh - 140px); /* Ajustado para dejar espacio al chat global */
+            min-height: calc(100vh - 40px);
             width: 100%;
         }
         #logo {
-            max-width: 60px; /* Reducido para que el logo sea más pequeño */
+            max-width: 60px;
             height: auto;
         }
         #game-selection {
@@ -120,7 +120,7 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
-            flex-direction: column; /* Asegura centrado vertical */
+            flex-direction: column;
         }
         .auth-container {
             background: #4a2c1a;
@@ -131,7 +131,7 @@
             width: 90%;
             max-width: 350px;
             box-sizing: border-box;
-            margin: auto; /* Centrado adicional */
+            margin: auto;
         }
         .auth-container h2 {
             margin: 0 0 15px;
@@ -418,7 +418,7 @@
             overflow-y: auto;
             z-index: 900;
             box-sizing: border-box;
-            margin: 10px auto; /* Centrado en móvil */
+            margin: 10px auto;
         }
         #online-players img {
             vertical-align: middle;
@@ -427,10 +427,7 @@
             height: 20px;
         }
         #global-chat-container {
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
+            position: static; /* Cambiado para que se desplace con la página */
             width: 90%;
             max-width: 300px;
             background: #4a2c1a;
@@ -438,8 +435,9 @@
             padding: 10px;
             color: #d4af37;
             font-family: 'Roboto', sans-serif;
-            z-index: 1000;
+            z-index: 900; /* Reducido para no tapar modales */
             box-sizing: border-box;
+            margin: 20px auto; /* Espaciado para que esté al final */
         }
         #global-chat-messages {
             height: 120px;
@@ -563,13 +561,13 @@
             max-width: 300px;
             box-sizing: border-box;
             text-align: center;
-            margin: 10px auto; /* Centrado en móvil */
+            margin: 10px auto;
         }
         #user-info p {
             margin: 5px 0;
             display: flex;
             align-items: center;
-            justify-content: center; /* Centrado en móvil */
+            justify-content: center;
         }
         #user-info img {
             width: 20px;
@@ -594,16 +592,16 @@
         @media (max-width: 768px) {
             body {
                 overflow-y: auto;
-                align-items: flex-start; /* Evita centrado vertical en móvil */
+                align-items: flex-start;
             }
             .container, .checkers-container {
-                margin: 10px auto 120px; /* Espacio para chat global */
+                margin: 10px auto 20px; /* Reducido para evitar espacio innecesario */
                 padding: 10px;
                 max-width: 100%;
-                min-height: auto; /* Permite deslizamiento */
+                min-height: auto;
             }
             #logo {
-                max-width: 50px; /* Logo más pequeño en móvil */
+                max-width: 50px;
             }
             #chessboard, #checkersboard {
                 grid-template-columns: repeat(8, 35px);
@@ -635,8 +633,7 @@
             #global-chat-container {
                 width: 90%;
                 max-width: 280px;
-                bottom: 0; /* Fijo en la parte inferior */
-                margin-bottom: 10px;
+                margin: 10px auto; /* Mantiene el chat al final */
             }
             #global-chat-messages {
                 height: 100px;
@@ -649,7 +646,7 @@
                 width: 120px;
                 height: 80px;
                 margin: 5px auto;
-                position: static; /* Evita superposición en móvil */
+                position: static;
             }
             #game-buttons button {
                 padding: 6px 10px;
@@ -714,7 +711,7 @@
             }
             #global-chat-container {
                 max-width: 400px;
-                bottom: 10px; /* Fijo en escritorio */
+                margin: 20px auto; /* Mantiene el chat al final */
             }
             #online-players {
                 position: fixed;
@@ -801,7 +798,7 @@
             </select>
             <input id="color-select" type="color" value="#FFFFFF">
             <button onclick="joinRoom()">Unirse</button>
-            <button onclick="openBotConfigModal()">Jugar con Bot</button>
+            <button onclick="showBotConfigModal()">Jugar con Bot</button>
             <button onclick="joinWaitlist()">Buscar Partida</button>
         </div>
         <div id="chessboard"></div>
@@ -856,9 +853,17 @@
                 <option value="black">Negras</option>
             </select>
             <div class="button-container">
-                <button onclick="startBotGame()">Iniciar</button>
-                <button onclick="closeBotConfigModal()">Cancelar</button>
+                <button onclick="startBotGame()">Jugar</button>
+                <button onclick="closeBotConfigModal()">Volver</button>
             </div>
+        </div>
+        <div id="global-chat-container">
+            <h3>Chat Global</h3>
+            <div id="global-chat-messages"></div>
+            <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
+            <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
+            <button id="record-global-audio" onclick="startGlobalRecording()">Grabar Audio</button>
+            <button id="stop-global-audio" onclick="stopGlobalRecording()" style="display: none;">Detener</button>
         </div>
     </div>
     <div class="checkers-container">
@@ -901,17 +906,17 @@
             <button onclick="goBack()">Volver</button>
         </div>
         <div id="saved-games"></div>
+        <div id="global-chat-container">
+            <h3>Chat Global</h3>
+            <div id="global-chat-messages"></div>
+            <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
+            <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
+            <button id="record-global-audio" onclick="startGlobalRecording()">Grabar Audio</button>
+            <button id="stop-global-audio" onclick="stopGlobalRecording()" style="display: none;">Detener</button>
+        </div>
     </div>
     <div id="online-players">
         <h3>Jugadores en Línea</h3>
-    </div>
-    <div id="global-chat-container">
-        <h3>Chat Global</h3>
-        <div id="global-chat-messages"></div>
-        <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
-        <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
-        <button id="record-global-audio" onclick="startGlobalRecording()">Grabar Audio</button>
-        <button id="stop-global-audio" onclick="stopGlobalRecording()" style="display: none;">Detener</button>
     </div>
     <div id="waitlist">
         <h2>Buscar Partida</h2>
@@ -962,6 +967,14 @@
             setGameType(game);
         }
 
+        function showBotConfigModal() {
+            document.getElementById('bot-config-modal').style.display = 'block';
+        }
+
+        function closeBotConfigModal() {
+            document.getElementById('bot-config-modal').style.display = 'none';
+        }
+
         function updateGlobalChatVisibility() {
             const chessboard = document.getElementById('chessboard');
             const checkersboard = document.getElementById('checkersboard');
@@ -969,18 +982,20 @@
             const checkersRoomSelection = document.querySelector('.checkers-container #room-selection');
             const waitlist = document.getElementById('waitlist');
             const privateChat = document.getElementById('private-chat');
-            const globalChat = document.getElementById('global-chat-container');
+            const globalChats = document.querySelectorAll('#global-chat-container');
 
-            if ((roomSelection && roomSelection.style.display === 'block') ||
-                (checkersRoomSelection && checkersRoomSelection.style.display === 'block') ||
-                (chessboard && chessboard.style.display === 'grid') ||
-                (checkersboard && checkersboard.style.display === 'grid') ||
-                (waitlist && waitlist.style.display === 'block') ||
-                (privateChat && privateChat.style.display === 'block')) {
-                globalChat.style.display = 'block';
-            } else {
-                globalChat.style.display = 'none';
-            }
+            globalChats.forEach(globalChat => {
+                if ((roomSelection && roomSelection.style.display === 'block') ||
+                    (checkersRoomSelection && checkersRoomSelection.style.display === 'block') ||
+                    (chessboard && chessboard.style.display === 'grid') ||
+                    (checkersboard && checkersboard.style.display === 'grid') ||
+                    (waitlist && waitlist.style.display === 'block') ||
+                    (privateChat && privateChat.style.display === 'block')) {
+                    globalChat.style.display = 'block';
+                } else {
+                    globalChat.style.display = 'none';
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
