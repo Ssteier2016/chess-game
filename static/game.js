@@ -8,7 +8,6 @@ let lastUpdateTime = null;
 let timerInterval = null;
 let mediaRecorder = null;
 let audioChunks = [];
-let previousBoard = null;
 let peer = null;
 let localStream = null;
 let playerColors = {};
@@ -19,8 +18,6 @@ let level = 0;
 let username = null;
 let currentAvatar = null;
 let isBotGame = false;
-let boardHistory = [];
-let currentHistoryIndex = 0;
 let gameType = 'chess';
 
 const socket = io(location.hostname === 'localhost' ? 'http://localhost:10000' : 'https://peonkingame.onrender.com');
@@ -32,8 +29,6 @@ const savedGamesDiv = document.getElementById('saved-games');
 const timers = document.getElementById('timers');
 const promotionModal = document.getElementById('promotion-modal');
 const globalChat = document.getElementById('global-chat-container');
-const moveHistorySlider = document.getElementById('move-history-slider');
-const touchMoveSlider = document.getElementById('touch-move-slider');
 
 function initializeChessboard() {
     chessboard.innerHTML = '';
@@ -65,14 +60,9 @@ function updateTheme() {
     });
 }
 
-function renderBoard(index = currentHistoryIndex) {
-    if (!boardHistory.length) {
-        console.log('Historial de tablero vacío');
-        return;
-    }
-    const boardToRender = boardHistory[index];
-    if (!boardToRender) {
-        console.log('Tablero no inicializado para el índice', index);
+function renderBoard() {
+    if (!board) {
+        console.log('Tablero no inicializado');
         return;
     }
     const pieceSymbols = {
@@ -89,14 +79,14 @@ function renderBoard(index = currentHistoryIndex) {
     squares.forEach(square => {
         const row = parseInt(square.dataset.row);
         const col = parseInt(square.dataset.col);
-        const piece = boardToRender[row][col] === '.' ? null : boardToRender[row][col];
+        const piece = board[row][col] === '.' ? null : board[row][col];
         square.textContent = piece ? pieceSymbols[piece] || piece : '';
         square.classList.remove('selected');
         if (piece && piece !== '.') {
             square.style.color = isWhite(piece) ? pieceColors[pieceColor].white : pieceColors[pieceColor].black;
         }
     });
-    if (selectedSquare && index === currentHistoryIndex) {
+    if (selectedSquare) {
         selectedSquare.classList.add('selected');
     }
 }
@@ -118,11 +108,7 @@ function handleSquareClick(event) {
         alert('No es tu turno.');
         return;
     }
-    if (currentHistoryIndex !== (boardHistory.length - 1)) {
-        alert('No puedes mover mientras ves un estado anterior.');
-        return;
-    }
-    if (!boardHistory[currentHistoryIndex]) {
+    if (!board) {
         console.log('Tablero no inicializado en handleSquareClick');
         return;
     }
@@ -130,27 +116,15 @@ function handleSquareClick(event) {
     if (!square) return;
     const row = parseInt(square.dataset.row);
     const col = parseInt(square.dataset.col);
-    const piece = boardHistory[currentHistoryIndex][row][col];
+    const piece = board[row][col];
     const position = String.fromCharCode(97 + col) + (8 - row);
-    const isTouchMoveEnabled = parseInt(touchMoveSlider.value) === 1;
 
     if (selectedSquare) {
-        if (isTouchMoveEnabled && selectedSquare !== square) {
-            const selectedRow = parseInt(selectedSquare.dataset.row);
-            const selectedCol = parseInt(selectedSquare.dataset.col);
-            const selectedPiece = boardHistory[currentHistoryIndex][selectedRow][selectedCol];
-            if (piece !== '.' && ((myColor === 'white' && isWhite(piece)) || (myColor === 'black' && !isWhite(piece)))) {
-                selectedSquare.classList.remove('selected');
-                selectedSquare = square;
-                square.classList.add('selected');
-                return;
-            }
-        }
         const fromRow = parseInt(selectedSquare.dataset.row);
         const fromCol = parseInt(selectedSquare.dataset.col);
         const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
         const to = position;
-        const selectedPiece = boardHistory[currentHistoryIndex][fromRow][fromCol];
+        const selectedPiece = board[fromRow][fromCol];
         if (selectedPiece.toLowerCase() === 'p' && ((myColor === 'white' && row === 0) || (myColor === 'black' && row === 7))) {
             document.getElementById('promotion-modal').style.display = 'flex';
             return new Promise(resolve => {
@@ -179,12 +153,12 @@ function handleSquareClick(event) {
 }
 
 function handleTouchStart(event) {
-    if (!username || (myColor !== turn) || (!room && !isBotGame) || !boardHistory[currentHistoryIndex] || currentHistoryIndex !== (boardHistory.length - 1)) return;
+    if (!username || (myColor !== turn) || (!room && !isBotGame) || !board) return;
     const square = event.target.closest('.square');
     if (!square) return;
     const row = parseInt(square.dataset.row);
     const col = parseInt(square.dataset.col);
-    const piece = boardHistory[currentHistoryIndex][row][col];
+    const piece = board[row][col];
     if (piece !== '.' && ((myColor === 'white' && isWhite(piece)) || (myColor === 'black' && !isWhite(piece)))) {
         if (selectedSquare) {
             selectedSquare.classList.remove('selected');
@@ -195,7 +169,7 @@ function handleTouchStart(event) {
 }
 
 function handleTouchEnd(event) {
-    if (!selectedSquare || !boardHistory[currentHistoryIndex]) return;
+    if (!selectedSquare || !board) return;
     const touchEndPos = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY };
     const square = document.elementFromPoint(touchEndPos.x, touchEndPos.y);
     if (square && square.classList.contains('square') && square !== selectedSquare) {
@@ -205,7 +179,7 @@ function handleTouchEnd(event) {
         const toCol = parseInt(square.dataset.col);
         const from = String.fromCharCode(97 + fromCol) + (8 - fromRow);
         const to = String.fromCharCode(97 + toCol) + (8 - toRow);
-        const piece = boardHistory[currentHistoryIndex][fromRow][fromCol];
+        const piece = board[fromRow][fromCol];
         if (piece.toLowerCase() === 'p' && ((myColor === 'white' && toRow === 0) || (myColor === 'black' && toRow === 7))) {
             document.getElementById('promotion-modal').style.display = 'flex';
             return new Promise(resolve => {
@@ -222,22 +196,10 @@ function handleTouchEnd(event) {
             selectedSquare.classList.remove('selected');
             selectedSquare = null;
         }
-    } else if (!parseInt(touchMoveSlider.value)) {
+    } else {
         selectedSquare.classList.remove('selected');
         selectedSquare = null;
     }
-}
-
-function openBotConfigModal() {
-    if (!username) {
-        alert('Por favor, iniciá sesión primero.');
-        return;
-    }
-    document.getElementById('bot-config-modal').style.display = 'flex';
-}
-
-function closeBotConfigModal() {
-    document.getElementById('bot-config-modal').style.display = 'none';
 }
 
 function startBotGame() {
@@ -251,10 +213,6 @@ function startBotGame() {
     gameButtons.style.display = 'block';
     timers.style.display = 'block';
     globalChat.style.display = 'block';
-    document.getElementById('move-history-slider').style.display = 'block';
-    document.getElementById('move-history-slider-label').style.display = 'block';
-    document.getElementById('touch-move-slider').style.display = 'block';
-    document.getElementById('touch-move-slider-label').style.display = 'block';
     isBotGame = true;
 }
 
@@ -271,14 +229,6 @@ function joinRoom() {
         return;
     }
     socket.emit('join', { room, timer, color });
-}
-
-function playWithBot() {
-    openBotConfigModal();
-}
-
-function watchGame(roomId) {
-    socket.emit('watch_game', { room: roomId });
 }
 
 function joinWaitlist() {
@@ -526,11 +476,15 @@ function startVideoCall() {
             peer.on('stream', remoteStream => {
                 document.getElementById('remote-video').srcObject = remoteStream;
                 document.getElementById('remote-video').style.display = 'block';
+                console.log('Recibido stream remoto');
             });
             peer.on('error', err => {
                 console.error('Error en SimplePeer:', err);
-                alert('Error en la videollamada. Intenta de nuevo.');
+                alert('Error en la videollamada: ' + err.message);
                 stopVideoCall();
+            });
+            peer.on('connect', () => {
+                console.log('Conexión WebRTC establecida');
             });
         })
         .catch(error => {
@@ -580,7 +534,7 @@ function saveGame() {
     }
     const gameName = prompt('Ingresá un nombre para la partida:');
     if (gameName && room) {
-        socket.emit('save_game', { room, game_name: gameName, board: boardHistory[currentHistoryIndex], turn });
+        socket.emit('save_game', { room, game_name: gameName, board, turn });
     }
 }
 
@@ -619,10 +573,6 @@ function goBack() {
     timers.style.display = 'none';
     savedGamesDiv.style.display = 'none';
     globalChat.style.display = 'block';
-    document.getElementById('move-history-slider').style.display = 'none';
-    document.getElementById('move-history-slider-label').style.display = 'none';
-    document.getElementById('touch-move-slider').style.display = 'none';
-    document.getElementById('touch-move-slider-label').style.display = 'none';
     stopTimer();
     stopVideoCall();
     room = null;
@@ -633,11 +583,6 @@ function goBack() {
     timeBlack = null;
     myColor = null;
     isBotGame = false;
-    boardHistory = [];
-    currentHistoryIndex = 0;
-    moveHistorySlider.value = 0;
-    moveHistorySlider.max = 0;
-    touchMoveSlider.value = localStorage.getItem('touchMove') || '0';
     updateTimers();
 }
 
@@ -677,14 +622,9 @@ function register() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                username = data.username;
-                currentAvatar = data.avatar;
+                document.getElementById('register-error').textContent = 'Registro exitoso, por favor inicia sesión.';
                 document.getElementById('register-screen').style.display = 'none';
-                document.getElementById('game-selection').style.display = 'flex';
-                document.querySelector('.container').style.display = 'none';
-                globalChat.style.display = 'block';
-                socket.emit('join_user_room', { username });
-                socket.emit('get_user_data', { username });
+                document.getElementById('login-screen').style.display = 'flex';
             } else {
                 document.getElementById('register-error').textContent = data.message || data.error;
             }
@@ -692,17 +632,6 @@ function register() {
         .catch(error => {
             document.getElementById('register-error').textContent = 'Error en el registro. Intenta de nuevo.';
         });
-}
-
-function previewAvatar(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('avatar-preview').src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
 }
 
 function renderOnlinePlayers(players) {
@@ -724,10 +653,15 @@ function renderOnlinePlayers(players) {
 
 function setGameType(type) {
     gameType = type;
-    document.getElementById('game-selection').style.display = 'none';
-    document.querySelector('.container').style.display = 'flex';
-    roomSelection.style.display = 'block';
-    globalChat.style.display = 'block';
+    if (type === 'chess') {
+        document.getElementById('game-selection').style.display = 'none';
+        document.querySelector('.container').style.display = 'flex';
+        roomSelection.style.display = 'block';
+        globalChat.style.display = 'block';
+    } else if (type === 'checkers') {
+        document.getElementById('game-selection').style.display = 'none';
+        document.querySelector('.checkers-container').style.display = 'flex';
+    }
 }
 
 socket.on('connect', () => {
@@ -773,11 +707,6 @@ socket.on('game_start', data => {
     timeWhite = data.time_white;
     timeBlack = data.time_black;
     playerColors = data.playerColors;
-    previousBoard = JSON.parse(JSON.stringify(board));
-    boardHistory = [JSON.parse(JSON.stringify(board))];
-    currentHistoryIndex = 0;
-    moveHistorySlider.max = 0;
-    moveHistorySlider.value = 0;
     roomSelection.style.display = 'none';
     chessboard.style.display = 'grid';
     chat.style.display = 'block';
@@ -786,10 +715,6 @@ socket.on('game_start', data => {
     savedGamesDiv.style.display = 'none';
     globalChat.style.display = 'block';
     document.querySelector('.container').style.display = 'flex';
-    document.getElementById('move-history-slider').style.display = 'block';
-    document.getElementById('move-history-slider-label').style.display = 'block';
-    document.getElementById('touch-move-slider').style.display = 'block';
-    document.getElementById('touch-move-slider-label').style.display = 'block';
     initializeChessboard();
     renderBoard();
     updateTimers();
@@ -799,13 +724,6 @@ socket.on('game_start', data => {
 socket.on('update_board', data => {
     board = data.board;
     turn = data.turn;
-    previousBoard = JSON.parse(JSON.stringify(board));
-    if (currentHistoryIndex === boardHistory.length - 1) {
-        boardHistory.push(JSON.parse(JSON.stringify(board)));
-        currentHistoryIndex++;
-        moveHistorySlider.max = currentHistoryIndex;
-        moveHistorySlider.value = currentHistoryIndex;
-    }
     selectedSquare = null;
     renderBoard();
 });
@@ -854,11 +772,15 @@ socket.on('video_signal', data => {
                 peer.on('stream', remoteStream => {
                     document.getElementById('remote-video').srcObject = remoteStream;
                     document.getElementById('remote-video').style.display = 'block';
+                    console.log('Recibido stream remoto del oponente');
                 });
                 peer.on('error', err => {
                     console.error('Error en SimplePeer:', err);
-                    alert('Error en la videollamada. Intenta de nuevo.');
+                    alert('Error en la videollamada: ' + err.message);
                     stopVideoCall();
+                });
+                peer.on('connect', () => {
+                    console.log('Conexión WebRTC establecida con el oponente');
                 });
                 peer.signal(data.signal);
             })
@@ -871,7 +793,9 @@ socket.on('video_signal', data => {
     }
 });
 
-socket.on('video_stop', () => stopVideoCall());
+socket.on('video_stop', () => {
+    stopVideoCall();
+});
 
 socket.on('player_left', data => {
     alert(data.message);
@@ -880,11 +804,13 @@ socket.on('player_left', data => {
 
 socket.on('game_over', data => {
     alert(`${data.message} Ganaste ${data.elo_points || 0} ELO y ${data.neig_points || 0} Neig.`);
-    updateUserData({ neig: neigBalance, elo: eloPoints, level: level });
+    updateUserData({ neig: data.neig, elo: data.elo, level: data.level });
     goBack();
 });
 
-socket.on('check', data => alert(data.message));
+socket.on('check', data => {
+    alert(data.message);
+});
 
 socket.on('resigned', data => {
     alert(data.message);
@@ -892,7 +818,9 @@ socket.on('resigned', data => {
     goBack();
 });
 
-socket.on('game_saved', data => alert(data.message));
+socket.on('game_saved', data => {
+    alert(data.message);
+});
 
 socket.on('saved_games_list', data => {
     savedGamesDiv.innerHTML = '';
@@ -910,10 +838,6 @@ socket.on('game_loaded', data => {
     room = data.room;
     timeWhite = null;
     timeBlack = null;
-    boardHistory = [JSON.parse(JSON.stringify(data.board))];
-    currentHistoryIndex = 0;
-    moveHistorySlider.max = 0;
-    moveHistorySlider.value = 0;
     roomSelection.style.display = 'none';
     chessboard.style.display = 'grid';
     chat.style.display = 'block';
@@ -922,10 +846,6 @@ socket.on('game_loaded', data => {
     savedGamesDiv.style.display = 'none';
     globalChat.style.display = 'block';
     document.querySelector('.container').style.display = 'flex';
-    document.getElementById('move-history-slider').style.display = 'block';
-    document.getElementById('move-history-slider-label').style.display = 'block';
-    document.getElementById('touch-move-slider').style.display = 'block';
-    document.getElementById('touch-move-slider-label').style.display = 'block';
     initializeChessboard();
     renderBoard();
     updateTimers();
@@ -936,7 +856,9 @@ socket.on('user_data_update', data => {
     updateUserData(data);
 });
 
-socket.on('waiting_opponent', data => alert(data.message));
+socket.on('waiting_opponent', data => {
+    alert(data.message);
+});
 
 socket.on('waitlist_update', data => {
     const waitlistDiv = document.getElementById('waitlist-players');
@@ -979,15 +901,6 @@ socket.on('private_message', data => {
     messages.scrollTop = messages.scrollHeight;
 });
 
-moveHistorySlider.addEventListener('input', () => {
-    currentHistoryIndex = parseInt(moveHistorySlider.value);
-    renderBoard(currentHistoryIndex);
-});
-
-touchMoveSlider.addEventListener('input', () => {
-    localStorage.setItem('touchMove', touchMoveSlider.value);
-});
-
 document.getElementById('login-form')?.addEventListener('submit', e => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -1004,7 +917,6 @@ document.getElementById('register-form')?.addEventListener('submit', e => {
 document.addEventListener('DOMContentLoaded', () => {
     initializeChessboard();
     if (username) socket.emit('get_user_data', { username });
-    touchMoveSlider.value = localStorage.getItem('touchMove') || '0';
 });
 
 window.onload = () => {
