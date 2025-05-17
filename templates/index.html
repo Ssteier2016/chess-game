@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peón KinGame</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #2b1d0e;
+            color: #d4af37;
+            font-family: 'Cinzel', serif;
+            margin: 0;
+            padding: 0;
+            overflow-y: auto;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #loading-screen img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 15px;
+        }
+        #loading-screen p {
+            font-size: 1.2em;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+        }
+        .container {
+            max-width: 1000px;
+            margin: 20px auto 100px;
+            padding: 15px;
+            background: #2b1d0e url('/static/parchment.png');
+            border: 5px solid #8b5a2b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            box-sizing: border-box;
+            min-height: calc(100vh - 40px);
+            width: 100%;
+        }
+        .checkers-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 15px;
+            background: #2b1d0e url('/static/parchment.png');
+            border: 5px solid #8b5a2b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        #logo {
+            max-width: 60px;
+            height: auto;
+        }
+        .title-container {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .title-container h1 {
+            margin: 0;
+            font-size: 1.8em;
+        }
+        .title-container .version {
+            font-size: 0.6em;
+            margin-left: 2px;
+        }
+        #game-selection {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .game-selection-container {
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            box-sizing: border-box;
+        }
+        .game-selection-container h2 {
+            margin: 0 0 20px;
+            font-size: 1.5em;
+        }
+        .game-selection-container button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            margin: 10px auto;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 80%;
+            font-family: 'Cinzel', serif;
+            font-size: 1em;
+        }
+        .game-selection-container img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+        }
+        #login-screen, #register-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .auth-container {
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 350px;
+            box-sizing: border-box;
+            margin: auto;
+        }
+        .auth-container h2 {
+            margin: 0 0 15px;
+            font-size: 1.5em;
+        }
+        .auth-container input, .auth-container button {
+            margin: 10px 0;
+            padding: 10px;
+            width: 80%;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+        .auth-container button {
+            cursor: pointer;
+            width: auto;
+            padding: 10px 25px;
+        }
+        .auth-container a {
+            color: #d4af37;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .auth-container img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 10px 0;
+        }
+        #avatar-preview {
+            display: block;
+            margin: 10px auto;
+        }
+        #recover-password {
+            display: none;
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 350px;
+            box-sizing: border-box;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1100;
+        }
+        #recover-password input, #recover-password button {
+            margin: 10px 0;
+            padding: 10px;
+            width: 80%;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        #recover-password button {
+            cursor: pointer;
+            width: auto;
+            padding: 10px 25px;
+        }
+        #chessboard {
+            display: none;
+            grid-template-columns: repeat(8, 40px);
+            grid-template-rows: repeat(8, 40px);
+            width: 320px;
+            height: 320px;
+            border: 5px solid #8b5a2b;
+            background: #4a2c1a;
+            margin: 15px auto;
+            box-sizing: border-box;
+        }
+        .square {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+        .white {
+            background: #f5f5dc;
+        }
+        .black {
+            background: #8b5a2b;
+        }
+        .white-brown {
+            background: #f5f5dc;
+        }
+        .black-brown {
+            background: #8b5a2b;
+        }
+        .white-green {
+            background: #ffffff;
+        }
+        .black-green {
+            background: #355e3b;
+        }
+        .white-blue {
+            background: #d3d3d3;
+        }
+        .black-blue {
+            background: #4682b4;
+        }
+        .piece-standard {
+            font-family: 'Roboto', sans-serif;
+        }
+        .piece-merida {
+            font-family: 'Chess Merida', sans-serif;
+        }
+        .piece-alpha {
+            font-family: 'Chess Alpha', sans-serif;
+        }
+        .selected {
+            background: #d4af37 !important;
+        }
+        #chat {
+            display: none;
+            width: 90%;
+            max-width: 300px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+            margin: 10px auto;
+            box-sizing: border-box;
+        }
+        #chat-messages {
+            height: 150px;
+            overflow-y: scroll;
+            border: 1px solid #8b5a2b;
+            background: #f5f5dc;
+            color: #000;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #chat-input {
+            width: 70%;
+            padding: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #chat button {
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #game-buttons {
+            display: none;
+            margin: 10px auto;
+            text-align: center;
+        }
+        #game-buttons button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+        }
+        #saved-games {
+            display: none;
+            margin: 10px auto;
+            width: 90%;
+            max-width: 300px;
+        }
+        #saved-games button {
+            display: block;
+            margin: 5px 0;
+            padding: 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            box-sizing: border-box;
+        }
+        #timers {
+            display: none;
+            margin: 10px auto;
+            font-size: 1em;
+            text-align: center;
+        }
+        #promotion-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #4a2c1a;
+            border: 5px solid #8b5a2b;
+            padding: 15px;
+            z-index: 1100;
+            width: 90%;
+            max-width: 300px;
+            box-sizing: border-box;
+        }
+        #promotion-modal button {
+            padding: 8px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+        #bot-config-modal, #theme-config-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #4a2c1a;
+            border: 5px solid #8b5a2b;
+            padding: 15px;
+            z-index: 1100;
+            color: #d4af37;
+            text-align: center;
+            width: 90%;
+            max-width: 300px;
+            box-sizing: border-box;
+        }
+        #bot-config-modal h2, #theme-config-modal h2 {
+            margin: 0 0 15px;
+            font-size: 1.5em;
+        }
+        #bot-config-modal label, #theme-config-modal label {
+            display: block;
+            margin: 10px 0 5px;
+            font-size: 1em;
+        }
+        #bot-config-modal select, #theme-config-modal select {
+            padding: 8px;
+            margin: 5px 0;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+        #bot-config-modal .button-container, #theme-config-modal .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        #bot-config-modal button, #theme-config-modal button {
+            padding: 8px 20px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+        }
+        #room-selection {
+            display: none;
+            margin: 15px auto;
+            text-align: center;
+            width: 90%;
+            max-width: 300px;
+        }
+        #room-selection input, #room-selection select {
+            padding: 5px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #room-selection button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #online-players {
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+            width: 90%;
+            max-width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 900;
+            box-sizing: border-box;
+            margin: 10px auto;
+        }
+        #online-players img {
+            vertical-align: middle;
+            margin-right: 5px;
+            width: 20px;
+            height: 20px;
+        }
+        #global-chat-container {
+            position: static;
+            width: 90%;
+            max-width: 300px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+            z-index: 900;
+            box-sizing: border-box;
+            margin: 20px auto;
+        }
+        #global-chat-messages {
+            height: 120px;
+            overflow-y: scroll;
+            border: 1px solid #8b5a2b;
+            background: #f5f5dc;
+            color: #000;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #global-chat-input {
+            width: 70%;
+            padding: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #global-chat-container button {
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #waitlist {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            z-index: 1100;
+            padding: 15px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        #waitlist-players {
+            max-width: 90%;
+            margin: 0 auto;
+            background: #4a2c1a;
+            padding: 15px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+        }
+        .player-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: #5a3a2a;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .player-item img {
+            width: 25px;
+            height: 25px;
+            margin-right: 10px;
+            border-radius: 50%;
+        }
+        #private-chat {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e url('/static/parchment.png');
+            z-index: 1100;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        #private-chat-messages {
+            max-width: 90%;
+            margin: 0 auto;
+            background: #4a2c1a;
+            padding: 15px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            height: 250px;
+            overflow-y: scroll;
+            color: #d4af37;
+        }
+        #private-chat-input {
+            width: 70%;
+            padding: 5px;
+            margin: 10px auto;
+            display: block;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #private-chat button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #local-video, #remote-video {
+            display: none;
+            width: 150px;
+            height: 100px;
+            border: 2px solid #8b5a2b;
+            margin: 10px auto;
+            z-index: 900;
+        }
+        #user-info {
+            background: #4a2c1a;
+            padding: 10px;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            z-index: 900;
+            width: 90%;
+            max-width: 300px;
+            box-sizing: border-box;
+            text-align: center;
+            margin: 10px auto;
+        }
+        #user-info p {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #user-info img {
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        #user-info button {
+            margin-top: 5px;
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .error {
+            color: #ff4040;
+            font-size: 0.9em;
+        }
+        #install-prompt {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #4a2c1a;
+            border: 5px solid #8b5a2b;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            z-index: 1200;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            width: 90%;
+            max-width: 300px;
+            box-sizing: border-box;
+        }
+        #install-prompt p {
+            margin: 0 0 10px;
+            font-size: 1em;
+        }
+        #install-button, #cancel-button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+        }
+        #install-button:hover, #cancel-button:hover {
+            background: #5a3a2a;
+        }
+        @font-face {
+            font-family: 'Chess Merida';
+            src: url('/static/chessmerida.ttf') format('truetype');
+        }
+        @font-face {
+            font-family: 'Chess Alpha';
+            src: url('/static/alpha.ttf') format('truetype');
+        }
+        @media (max-width: 768px) {
+            body {
+                overflow-y: auto;
+                align-items: flex-start;
+            }
+            .container, .checkers-container {
+                margin: 10px auto 20px;
+                padding: 10px;
+                max-width: 100%;
+                min-height: auto;
+            }
+            #logo {
+                max-width: 50px;
+            }
+            .title-container h1 {
+                font-size: 1.5em;
+            }
+            .title-container .version {
+                font-size: 0.5em;
+            }
+            #chessboard {
+                grid-template-columns: repeat(8, 35px);
+                grid-template-rows: repeat(8, 35px);
+                width: 280px;
+                height: 280px;
+            }
+            .square {
+                width: 35px;
+                height: 35px;
+                font-size: 1.2em;
+            }
+            #online-players {
+                position: static;
+                margin: 10px auto;
+                width: 90%;
+                max-width: 300px;
+            }
+            #user-info {
+                position: static;
+                margin: 10px auto;
+                width: 90%;
+                max-width: 300px;
+                text-align: center;
+            }
+            #user-info p {
+                justify-content: center;
+            }
+            #global-chat-container {
+                width: 90%;
+                max-width: 280px;
+                margin: 10px auto;
+            }
+            #global-chat-messages {
+                height: 100px;
+            }
+            #chat {
+                width: 90%;
+                max-width: 280px;
+            }
+            #local-video, #remote-video {
+                width: 120px;
+                height: 80px;
+                margin: 5px auto;
+                position: static;
+            }
+            #game-buttons button {
+                padding: 6px 10px;
+                font-size: 0.9em;
+            }
+            #room-selection {
+                width: 90%;
+                max-width: 280px;
+            }
+            #room-selection input, #room-selection select {
+                width: 100%;
+            }
+            #promotion-modal, #bot-config-modal, #theme-config-modal, #recover-password {
+                width: 90%;
+                max-width: 280px;
+            }
+            #install-prompt {
+                width: 90%;
+                max-width: 280px;
+                bottom: 10px;
+                right: 10px;
+            }
+            #waitlist-players {
+                width: 90%;
+                max-width: 280px;
+            }
+            #private-chat-messages {
+                width: 90%;
+                max-width: 280px;
+                height: 200px;
+            }
+            .game-selection-container {
+                width: 90%;
+                max-width: 300px;
+            }
+            .game-selection-container button {
+                width: 90%;
+            }
+            .auth-container {
+                width: 90%;
+                max-width: 300px;
+            }
+        }
+        @media (min-width: 768px) {
+            #chessboard {
+                grid-template-columns: repeat(8, 50px);
+                grid-template-rows: repeat(8, 50px);
+                width: 400px;
+                height: 400px;
+            }
+            .square {
+                width: 50px;
+                height: 50px;
+                font-size: 1.8em;
+            }
+            #chat {
+                margin: 10px auto;
+            }
+            #local-video {
+                position: fixed;
+                bottom: 10px;
+                left: 10px;
+            }
+            #remote-video {
+                position: fixed;
+                bottom: 10px;
+                left: 170px;
+            }
+            #global-chat-container {
+                max-width: 400px;
+                margin: 20px auto;
+            }
+            #online-players {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                width: 200px;
+            }
+            #user-info {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 180px;
+                text-align: right;
+            }
+            #user-info p {
+                justify-content: flex-end;
+            }
+            #install-prompt {
+                max-width: 350px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <img src="/static/favicon.ico" alt="Logo">
+        <p>Cargando Peón KinGame...</p>
+    </div>
+    <div id="login-screen">
+        <div class="auth-container">
+            <h2>Iniciar Sesión</h2>
+            <form id="login-form">
+                <input type="text" name="username" placeholder="Usuario" required>
+                <input type="password" name="password" placeholder="Contraseña" required>
+                <button type="submit">Iniciar Sesión</button>
+                <p id="login-error" class="error"></p>
+                <a onclick="showRecoverPassword()">Olvidé mi contraseña</a>
+                <a onclick="showRegisterScreen()">¿No tienes cuenta? Regístrate</a>
+            </form>
+        </div>
+    </div>
+    <div id="register-screen">
+        <div class="auth-container">
+            <h2>Registrarse</h2>
+            <form id="register-form" enctype="multipart/form-data">
+                <input type="text" name="username" placeholder="Usuario" required>
+                <input type="password" name="password" placeholder="Contraseña" required>
+                <input type="file" name="avatar" accept="image/*" onchange="previewAvatar(event)">
+                <img id="avatar-preview" src="/static/default-avatar.png" alt="Avatar">
+                <button type="submit">Registrarse</button>
+                <p id="register-error" class="error"></p>
+                <a onclick="showLoginScreen()">Volver al inicio de sesión</a>
+            </form>
+        </div>
+    </div>
+    <div id="recover-password">
+        <h2>Recuperar Contraseña</h2>
+        <form id="recover-form">
+            <input type="text" name="username" placeholder="Usuario" required>
+            <button type="submit">Enviar Código</button>
+            <p id="recover-error" class="error"></p>
+        </form>
+        <form id="reset-form" style="display: none;">
+            <input type="text" name="code" placeholder="Código de recuperación" required>
+            <input type="password" name="new-password" placeholder="Nueva contraseña" required>
+            <button type="submit">Cambiar Contraseña</button>
+            <p id="reset-error" class="error"></p>
+        </form>
+        <button onclick="hideRecoverPassword()">Volver</button>
+    </div>
+    <div id="game-selection">
+        <div class="game-selection-container">
+            <h2>Selecciona un Juego</h2>
+            <button onclick="selectGame('chess')">
+                <img src="/static/rey.png" alt="Ajedrez"> Jugar Ajedrez ♟️
+            </button>
+            <button onclick="selectGame('checkers')">
+                <img src="/static/reina.png" alt="Damas"> Jugar Damas
+            </button>
+        </div>
+    </div>
+    <div class="container">
+        <img id="logo" src="/static/rey.png" alt="Logo Rey">
+        <div class="title-container">
+            <h1>PeonKinGame</h1>
+            <span class="version">1.3</span>
+        </div>
+        <div id="room-selection">
+            <h2>Unirse a una Sala</h2>
+            <input id="room-id" type="text" placeholder="ID de la sala">
+            <select id="timer-select">
+                <option value="0">Sin temporizador</option>
+                <option value="5">5 minutos</option>
+                <option value="10">10 minutos</option>
+                <option value="15">15 minutos</option>
+            </select>
+            <input id="color-select" type="color" value="#FFFFFF">
+            <button onclick="joinRoom()">Unirse</button>
+            <button onclick="showBotConfigModal()">Jugar con Bot</button>
+            <button onclick="joinWaitlist()">Buscar Partida</button>
+            <button onclick="showThemeConfigModal()">Personalizar Tablero</button>
+        </div>
+        <div id="chessboard"></div>
+        <div id="timers">
+            <p id="white-timer">Blancas: --:--</p>
+            <p id="black-timer">Negras: --:--</p>
+        </div>
+        <div id="chat">
+            <h3>Chat de la Partida</h3>
+            <div id="chat-messages"></div>
+            <input id="chat-input" type="text" placeholder="Escribe un mensaje...">
+            <button onclick="sendMessage()">Enviar</button>
+            <button id="record-audio" onclick="startRecording()">Grabar Audio</button>
+            <button id="stop-audio" onclick="stopRecording()" style="display: none;">Detener</button>
+            <button id="start-video" onclick="startVideoCall()">Iniciar Video</button>
+            <button id="stop-video" onclick="stopVideoCall()" style="display: none;">Detener Video</button>
+        </div>
+        <video id="local-video" autoplay muted></video>
+        <video id="remote-video" autoplay></video>
+        <div id="game-buttons">
+            <button onclick="saveGame()">Guardar Partida</button>
+            <button onclick="loadSavedGames()">Cargar Partida</button>
+            <button onclick="resignGame()">Abandonar</button>
+            <button onclick="goBack()">Volver</button>
+        </div>
+        <div id="saved-games"></div>
+        <div id="promotion-modal">
+            <h3>Promoción de Peón</h3>
+            <button onclick="selectPromotion('q')">♛</button>
+            <button onclick="selectPromotion('r')">♜</button>
+            <button onclick="selectPromotion('b')">♝</button>
+            <button onclick="selectPromotion('n')">♞</button>
+        </div>
+        <div id="bot-config-modal">
+            <h2>Configurar Partida con Bot</h2>
+            <label for="bot-timer-select">Temporizador:</label>
+            <select id="bot-timer-select">
+                <option value="0">Sin temporizador</option>
+                <option value="5">5 minutos</option>
+                <option value="10">10 minutos</option>
+                <option value="15">15 minutos</option>
+            </select>
+            <label for="bot-difficulty-select">Dificultad:</label>
+            <select id="bot-difficulty-select">
+                <option value="easy">Fácil</option>
+                <option value="medium">Medio</option>
+                <option value="hard">Difícil</option>
+            </select>
+            <label for="bot-player-color-select">Color:</label>
+            <select id="bot-player-color-select">
+                <option value="white">Blancas</option>
+                <option value="black">Negras</option>
+            </select>
+            <div class="button-container">
+                <button onclick="startBotGame()">Jugar</button>
+                <button onclick="showThemeConfigModal()">Personalizar</button>
+                <button onclick="closeBotConfigModal()">Volver</button>
+            </div>
+        </div>
+        <div id="theme-config-modal">
+            <h2>Personalizar Tablero y Piezas</h2>
+            <label for="board-color-select">Color del Tablero:</label>
+            <select id="board-color-select">
+                <option value="brown">Marrón/Beige</option>
+                <option value="green">Verde/Blanco</option>
+                <option value="blue">Azul/Gris</option>
+            </select>
+            <label for="piece-color-select">Color de las Piezas:</label>
+            <select id="piece-color-select">
+                <option value="white-black">Blanco/Negro</option>
+                <option value="gold-silver">Dorado/Plateado</option>
+                <option value="red-blue">Rojo/Azul</option>
+            </select>
+            <label for="piece-style-select">Estilo de las Piezas:</label>
+            <select id="piece-style-select">
+                <option value="standard">Estándar</option>
+                <option value="merida">Merida</option>
+                <option value="alpha">Alpha</option>
+            </select>
+            <div class="button-container">
+                <button onclick="applyTheme()">Aplicar</button>
+                <button onclick="closeThemeConfigModal()">Cerrar</button>
+            </div>
+        </div>
+        <div id="global-chat-container">
+            <h3>Chat Global</h3>
+            <div id="global-chat-messages"></div>
+            <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
+            <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
+            <button id="record-global-audio" onclick="startGlobalRecording()">Grabar Audio</button>
+            <button id="stop-global-audio" onclick="stopGlobalRecording()" style="display: none;">Detener</button>
+        </div>
+    </div>
+    <div class="checkers-container">
+        <img id="logo" src="/static/reina.png" alt="Logo Reina">
+        <div class="title-container">
+            <h1>PeonKinGame</h1>
+            <span class="version">1.3</span>
+        </div>
+        <p>Estamos desarrollando Damas, próximamente podrás jugar 🔴👑⚫</p>
+        <button onclick="goBackToGameSelection()">Volver</button>
+    </div>
+    <div id="online-players">
+        <h3>Jugadores en Línea</h3>
+    </div>
+    <div id="waitlist">
+        <h2>Buscar Partida</h2>
+        <div id="waitlist-players"></div>
+        <button onclick="goBackFromWaitlist()">Volver</button>
+    </div>
+    <div id="private-chat">
+        <h2>Chat Privado</h2>
+        <div id="private-chat-messages"></div>
+        <input id="private-chat-input" type="text" placeholder="Escribe un mensaje...">
+        <button onclick="sendPrivateMessage()">Enviar</button>
+        <button onclick="acceptConditions()">Aceptar Condiciones</button>
+        <button onclick="goBackFromPrivateChat()">Volver</button>
+    </div>
+    <div id="user-info">
+        <p id="neig-balance">10000 <img src="/static/neig.png" alt="Neig"></p>
+        <p id="elo-level">ELO: 0 (Nivel 0)</p>
+        <button onclick="logout()">Cerrar Sesión</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.1/simple-peer.min.js"></script>
+    <script src="/static/game.js"></script>
+    <script>
+        function showRecoverPassword() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('recover-password').style.display = 'block';
+        }
+
+        function hideRecoverPassword() {
+            document.getElementById('recover-password').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('recover-form').style.display = 'block';
+            document.getElementById('reset-form').style.display = 'none';
+        }
+
+        function showRegisterScreen() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('register-screen').style.display = 'flex';
+        }
+
+        function showLoginScreen() {
+            document.getElementById('register-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+        }
+
+        function previewAvatar(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('avatar-preview').src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function selectGame(game) {
+            setGameType(game);
+        }
+
+        function showBotConfigModal() {
+            document.getElementById('bot-config-modal').style.display = 'block';
+        }
+
+        function closeBotConfigModal() {
+            document.getElementById('bot-config-modal').style.display = 'none';
+        }
+
+        function showThemeConfigModal() {
+            document.getElementById('theme-config-modal').style.display = 'block';
+        }
+
+        function closeThemeConfigModal() {
+            document.getElementById('theme-config-modal').style.display = 'none';
+        }
+
+        function applyTheme() {
+            const boardColor = document.getElementById('board-color-select').value;
+            const pieceColor = document.getElementById('piece-color-select').value;
+            const pieceStyle = document.getElementById('piece-style-select').value;
+            localStorage.setItem('boardColor', boardColor);
+            localStorage.setItem('pieceColor', pieceColor);
+            localStorage.setItem('pieceStyle', pieceStyle);
+            updateTheme();
+            renderBoard();
+            closeThemeConfigModal();
+        }
+
+        function updateGlobalChatVisibility() {
+            const chessboard = document.getElementById('chessboard');
+            const roomSelection = document.querySelector('.container #room-selection');
+            const waitlist = document.getElementById('waitlist');
+            const privateChat = document.getElementById('private-chat');
+            const globalChats = document.querySelectorAll('#global-chat-container');
+
+            globalChats.forEach(globalChat => {
+                if ((roomSelection && roomSelection.style.display === 'block') ||
+                    (chessboard && chessboard.style.display === 'grid') ||
+                    (waitlist && waitlist.style.display === 'block') ||
+                    (privateChat && privateChat.style.display === 'block')) {
+                    globalChat.style.display = 'block';
+                } else {
+                    globalChat.style.display = 'none';
+                }
+            });
+        }
+
+        function goBackToGameSelection() {
+            document.querySelector('.checkers-container').style.display = 'none';
+            document.getElementById('game-selection').style.display = 'flex';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateGlobalChatVisibility();
+            const boardColor = localStorage.getItem('boardColor') || 'brown';
+            const pieceColor = localStorage.getItem('pieceColor') || 'white-black';
+            const pieceStyle = localStorage.getItem('pieceStyle') || 'standard';
+            document.getElementById('board-color-select').value = boardColor;
+            document.getElementById('piece-color-select').value = pieceColor;
+            document.getElementById('piece-style-select').value = pieceStyle;
+            updateTheme();
+        });
+
+        const observer = new MutationObserver(updateGlobalChatVisibility);
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    </script>
+</body>
+</html>
