@@ -43,7 +43,7 @@
             font-size: 1.2em;
             text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
         }
-        .container, .checkers-container {
+        .container {
             max-width: 1000px;
             margin: 20px auto 100px;
             padding: 15px;
@@ -57,6 +57,19 @@
             box-sizing: border-box;
             min-height: calc(100vh - 40px);
             width: 100%;
+        }
+        .checkers-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 15px;
+            background: #2b1d0e url('/static/parchment.png');
+            border: 5px solid #8b5a2b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-sizing: border-box;
         }
         #logo {
             max-width: 60px;
@@ -200,7 +213,7 @@
             width: auto;
             padding: 10px 25px;
         }
-        #chessboard, #checkersboard {
+        #chessboard {
             display: none;
             grid-template-columns: repeat(8, 40px);
             grid-template-rows: repeat(8, 40px);
@@ -308,18 +321,6 @@
             cursor: pointer;
             font-family: 'Cinzel', serif;
         }
-        #move-history-slider, #touch-move-slider {
-            display: none;
-            margin: 10px auto;
-            width: 80%;
-            max-width: 300px;
-        }
-        #move-history-slider-label, #touch-move-slider-label {
-            display: block;
-            text-align: center;
-            margin: 5px 0;
-            font-size: 0.9em;
-        }
         #saved-games {
             display: none;
             margin: 10px auto;
@@ -353,7 +354,7 @@
             transform: translate(-50%, -50%);
             background: #4a2c1a;
             border: 5px solid #8b5a2b;
-            padding: 15 FRApx;
+            padding: 15px;
             z-index: 1100;
             width: 90%;
             max-width: 300px;
@@ -650,7 +651,7 @@
             #logo {
                 max-width: 50px;
             }
-            #chessboard, #checkersboard {
+            #chessboard {
                 grid-template-columns: repeat(8, 35px);
                 grid-template-rows: repeat(8, 35px);
                 width: 280px;
@@ -732,7 +733,7 @@
             }
         }
         @media (min-width: 768px) {
-            #chessboard, #checkersboard {
+            #chessboard {
                 grid-template-columns: repeat(8, 50px);
                 grid-template-rows: repeat(8, 50px);
                 width: 400px;
@@ -830,7 +831,7 @@
         <div class="game-selection-container">
             <h2>Selecciona un Juego</h2>
             <button onclick="selectGame('chess')">
-                <img src="/static/rey.png" alt="Ajedrez"> Jugar Ajedrez
+                <img src="/static/rey.png" alt="Ajedrez"> Jugar Ajedrez ♟️
             </button>
             <button onclick="selectGame('checkers')">
                 <img src="/static/reina.png" alt="Damas"> Jugar Damas
@@ -878,10 +879,6 @@
             <button onclick="resignGame()">Abandonar</button>
             <button onclick="goBack()">Volver</button>
         </div>
-        <label id="move-history-slider-label" style="display: none;">Historial de Movimientos</label>
-        <input type="range" id="move-history-slider" min="0" max="0" value="0" step="1">
-        <label id="touch-move-slider-label" style="display: none;">Pieza Tocada, Pieza Movida</label>
-        <input type="range" id="touch-move-slider" min="0" max="1" value="0" step="1">
         <div id="saved-games"></div>
         <div id="promotion-modal">
             <h3>Promoción de Peón</h3>
@@ -953,56 +950,8 @@
     <div class="checkers-container">
         <img id="logo" src="/static/reina.png" alt="Logo Reina">
         <h1>Peón KinGame - Damas</h1>
-        <div id="room-selection">
-            <h2>Unirse a una Sala</h2>
-            <input id="room-id" type="text" placeholder="ID de la sala">
-            <select id="timer-select">
-                <option value="0">Sin temporizador</option>
-                <option value="5">5 minutos</option>
-                <option value="10">10 minutos</option>
-                <option value="15">15 minutos</option>
-            </select>
-            <input id="color-select" type="color" value="#FFFFFF">
-            <button onclick="joinRoom()">Unirse</button>
-            <button onclick="joinWaitlist()">Buscar Partida</button>
-            <button onclick="showThemeConfigModal()">Personalizar Tablero</button>
-        </div>
-        <div id="checkersboard"></div>
-        <div id="timers">
-            <p id="white-timer">Blancas: --:--</p>
-            <p id="black-timer">Negras: --:--</p>
-        </div>
-        <div id="chat">
-            <h3>Chat de la Partida</h3>
-            <div id="chat-messages"></div>
-            <input id="chat-input" type="text" placeholder="Escribe un mensaje...">
-            <button onclick="sendMessage()">Enviar</button>
-            <button id="record-audio" onclick="startRecording()">Grabar Audio</button>
-            <button id="stop-audio" onclick="stopRecording()" style="display: none;">Detener</button>
-            <button id="start-video" onclick="startVideoCall()">Iniciar Video</button>
-            <button id="stop-video" onclick="stopVideoCall()" style="display: none;">Detener Video</button>
-        </div>
-        <video id="local-video" autoplay muted></video>
-        <video id="remote-video" autoplay></video>
-        <div id="game-buttons">
-            <button onclick="saveGame()">Guardar Partida</button>
-            <button onclick="loadSavedGames()">Cargar Partida</button>
-            <button onclick="resignGame()">Abandonar</button>
-            <button onclick="goBack()">Volver</button>
-        </div>
-        <label id="move-history-slider-label" style="display: none;">Historial de Movimientos</label>
-        <input type="range" id="move-history-slider" min="0" max="0" value="0" step="1">
-        <label id="touch-move-slider-label" style="display: none;">Pieza Tocada, Pieza Movida</label>
-        <input type="range" id="touch-move-slider" min="0" max="1" value="0" step="1">
-        <div id="saved-games"></div>
-        <div id="global-chat-container">
-            <h3>Chat Global</h3>
-            <div id="global-chat-messages"></div>
-            <input id="global-chat-input" type="text" placeholder="Escribe un mensaje...">
-            <button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button>
-            <button id="record-global-audio" onclick="startGlobalRecording()">Grabar Audio</button>
-            <button id="stop-global-audio" onclick="stopGlobalRecording()" style="display: none;">Detener</button>
-        </div>
+        <p>Estamos desarrollando Damas, próximamente podrás jugar 🔴👑⚫</p>
+        <button onclick="goBackToGameSelection()">Volver</button>
     </div>
     <div id="online-players">
         <h3>Jugadores en Línea</h3>
@@ -1096,18 +1045,14 @@
 
         function updateGlobalChatVisibility() {
             const chessboard = document.getElementById('chessboard');
-            const checkersboard = document.getElementById('checkersboard');
             const roomSelection = document.querySelector('.container #room-selection');
-            const checkersRoomSelection = document.querySelector('.checkers-container #room-selection');
             const waitlist = document.getElementById('waitlist');
             const privateChat = document.getElementById('private-chat');
             const globalChats = document.querySelectorAll('#global-chat-container');
 
             globalChats.forEach(globalChat => {
                 if ((roomSelection && roomSelection.style.display === 'block') ||
-                    (checkersRoomSelection && checkersRoomSelection.style.display === 'block') ||
                     (chessboard && chessboard.style.display === 'grid') ||
-                    (checkersboard && checkersboard.style.display === 'grid') ||
                     (waitlist && waitlist.style.display === 'block') ||
                     (privateChat && privateChat.style.display === 'block')) {
                     globalChat.style.display = 'block';
@@ -1115,6 +1060,11 @@
                     globalChat.style.display = 'none';
                 }
             });
+        }
+
+        function goBackToGameSelection() {
+            document.querySelector('.checkers-container').style.display = 'none';
+            document.getElementById('game-selection').style.display = 'flex';
         }
 
         document.addEventListener('DOMContentLoaded', () => {
