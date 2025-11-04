@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peón KinGame</title>
+    <!-- Placeholder for icon and manifest, replaced with meta tags for single file -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght[email protected]&display=swap" rel="stylesheet">
+    <style>
+        /* General Styles */
+        body {
+            background-color: #2b1d0e;
+            color: #d4af37;
+            font-family: 'Cinzel', serif;
+            margin: 0;
+            padding: 0;
+            overflow-y: auto;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        /* Message Box for Feedback */
+        #message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 2000;
+            font-family: 'Roboto', sans-serif;
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .success {
+            background-color: #355e3b; /* Dark Green */
+            border: 2px solid #a8c388;
+            color: #ffffff;
+        }
+        .error-msg {
+            background-color: #8b0000; /* Dark Red */
+            border: 2px solid #ff4040;
+            color: #ffffff;
+        }
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #loading-screen img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 15px;
+            border-radius: 50%;
+        }
+        #loading-screen p {
+            font-size: 1.2em;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+        }
+        /* Main Containers */
+        .container, .checkers-container {
+            max-width: 100%;
+            width: 95%;
+            margin: 10px auto;
+            padding: 15px;
+            background: #2b1d0e;
+            border: 5px solid #8b5a2b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            box-sizing: border-box;
+            min-height: calc(100vh - 20px);
+            text-align: center;
+        }
+        #logo {
+            max-width: 60px;
+            height: auto;
+            border-radius: 50%;
+        }
+        .title-container {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .title-container h1 {
+            margin: 0;
+            font-size: 1.8em;
+        }
+        .title-container .version {
+            font-size: 0.6em;
+            margin-left: 2px;
+        }
+        /* Authentication & Selection Screens */
+        #game-selection, #login-screen, #register-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #2b1d0e;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        .game-selection-container, .auth-container, #recover-password {
+            background: #4a2c1a;
+            padding: 20px;
+            border: 5px solid #8b5a2b;
+            border-radius: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 350px;
+            box-sizing: border-box;
+            margin: auto;
+        }
+        .auth-container input, .auth-container select, .auth-container button,
+        .game-selection-container button, #room-selection input, #room-selection select, #room-selection button {
+            margin: 8px 0;
+            padding: 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-family: 'Cinzel', serif;
+            text-shadow: 1px 1px 2px #000;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .auth-container input, .auth-container select, #room-selection input, #room-selection select {
+            width: 90%;
+            font-family: 'Roboto', sans-serif;
+        }
+        .game-selection-container button, #room-selection button {
+            width: 90%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .game-selection-container button img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+        }
+        /* Chess Board and Pieces (Simplified) */
+        #chessboard {
+            display: none;
+            grid-template-columns: repeat(8, 40px);
+            grid-template-rows: repeat(8, 40px);
+            width: 320px;
+            height: 320px;
+            border: 5px solid #8b5a2b;
+            background: #4a2c1a;
+            margin: 15px auto;
+            box-sizing: border-box;
+            max-width: 90vw;
+            max-height: 90vw;
+        }
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .white-brown { background: #f5f5dc; }
+        .black-brown { background: #8b5a2b; }
+        .white-green { background: #ffffff; }
+        .black-green { background: #355e3b; }
+        .white-blue { background: #d3d3d3; }
+        .black-blue { background: #4682b4; }
+        .piece-standard { color: #000; } /* Placeholder for styling pieces */
+        .selected { background: #d4af37 !important; }
+        /* Game Controls */
+        #game-buttons {
+            display: none;
+            margin: 10px auto;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        #game-buttons button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+            transition: background 0.2s;
+            width: 48%; /* Adjusting width for better layout */
+        }
+        #game-buttons button:hover {
+            background: #5a3a2a;
+        }
+        #saved-games {
+            display: none;
+            margin: 10px auto;
+            width: 90%;
+            max-width: 320px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            box-sizing: border-box;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #saved-games button {
+            display: block;
+            margin: 5px 0;
+            padding: 10px;
+            background: #5a3a2a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+            font-size: 0.9em;
+        }
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            .container, .checkers-container {
+                margin: 10px auto;
+                min-height: auto;
+            }
+            #chessboard {
+                grid-template-columns: repeat(8, 1fr);
+                grid-template-rows: repeat(8, 1fr);
+                width: 90vw;
+                height: 90vw;
+            }
+            .square {
+                font-size: 1.2em;
+            }
+            #game-buttons button {
+                width: 100%;
+            }
+            #user-info, #online-players, #global-chat-container {
+                position: static !important;
+                margin: 10px auto;
+                width: 90%;
+                max-width: 400px;
+            }
+            #local-video, #remote-video {
+                position: static !important;
+                margin: 10px auto;
+                width: 90%;
+                max-width: 200px;
+                height: 150px;
+            }
+        }
+        @media (min-width: 768px) {
+            #chessboard {
+                grid-template-columns: repeat(8, 50px);
+                grid-template-rows: repeat(8, 50px);
+                width: 400px;
+                height: 400px;
+            }
+            .square {
+                font-size: 1.8em;
+            }
+            #online-players {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                width: 200px;
+            }
+            #user-info {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 180px;
+                text-align: right;
+            }
+            #local-video {
+                position: fixed;
+                bottom: 10px;
+                left: 10px;
+            }
+            #remote-video {
+                position: fixed;
+                bottom: 10px;
+                left: 170px;
+            }
+        }
+        /* Remaining styles (chat, modal, etc.) simplified for brevity but kept functional */
+        #chat, #global-chat-container {
+            width: 90%;
+            max-width: 400px;
+            background: #4a2c1a;
+            border: 2px solid #8b5a2b;
+            padding: 10px;
+            color: #d4af37;
+            font-family: 'Roboto', sans-serif;
+            margin: 10px auto;
+            box-sizing: border-box;
+        }
+        #chat-messages, #global-chat-messages {
+            height: 150px;
+            overflow-y: scroll;
+            border: 1px solid #8b5a2b;
+            background: #f5f5dc;
+            color: #000;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #chat-input, #global-chat-input {
+            width: 70%;
+            padding: 5px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+        }
+        #chat button, #global-chat-container button {
+            padding: 5px 10px;
+            background: #4a2c1a;
+            color: #d4af37;
+            border: 2px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #user-info img {
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        .error {
+            color: #ff4040;
+            font-size: 0.9em;
+        }
+        /* All Modals */
+        #promotion-modal, #bot-config-modal, #theme-config-modal, #recover-password, #waitlist, #private-chat {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #4a2c1a;
+            border: 5px solid #8b5a2b;
+            padding: 15px;
+            z-index: 1100;
+            color: #d4af37;
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+            box-sizing: border-box;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="message-box" style="opacity:0;"></div>
+    <div id="loading-screen">
+        <img src="https://placehold.co/80x80/d4af37/2b1d0e?text=RK" alt="Logo">
+        <p>Cargando Peón KinGame...</p>
+    </div>
+    <!-- Authentication Screens (Kept as stubs) -->
+    <div id="login-screen">
+        <div class="auth-container">
+            <h2>Iniciar Sesión</h2>
+            <form id="login-form"><input type="text" name="username" placeholder="Usuario" required><input type="password" name="password" placeholder="Contraseña" required><button type="submit">Iniciar Sesión</button><p id="login-error" class="error"></p><a onclick="showRecoverPassword()">Olvidé mi contraseña</a><a onclick="showRegisterScreen()">¿No tienes cuenta? Regístrate</a></form>
+        </div>
+    </div>
+    <div id="register-screen">
+        <div class="auth-container">
+            <h2>Registrarse</h2>
+            <form id="register-form" enctype="multipart/form-data"><input type="text" name="username" placeholder="Usuario" required><input type="password" name="password" placeholder="Contraseña" required><input type="file" name="avatar" accept="image/*" onchange="previewAvatar(event)"><img id="avatar-preview" src="https://placehold.co/80x80/4a2c1a/d4af37?text=AVATAR" alt="Avatar"><button type="submit">Registrarse</button><p id="register-error" class="error"></p><a onclick="showLoginScreen()">Volver al inicio de sesión</a></form>
+        </div>
+    </div>
+    <div id="recover-password">
+        <h2>Recuperar Contraseña</h2>
+        <form id="recover-form"><input type="text" name="username" placeholder="Usuario" required><button type="submit">Enviar Código</button><p id="recover-error" class="error"></p></form>
+        <form id="reset-form" style="display: none;"><input type="text" name="code" placeholder="Código de recuperación" required><input type="password" name="new-password" placeholder="Nueva contraseña" required><button type="submit">Cambiar Contraseña</button><p id="reset-error" class="error"></p></form>
+        <button onclick="hideRecoverPassword()">Volver</button>
+    </div>
+    <div id="game-selection">
+        <div class="game-selection-container">
+            <h2>Selecciona un Juego</h2>
+            <button onclick="selectGame('chess')"><img src="https://placehold.co/30x30/d4af37/2b1d0e?text=CH" alt="Ajedrez"> Jugar Ajedrez ♟️</button>
+            <button onclick="selectGame('checkers')"><img src="https://placehold.co/30x30/d4af37/2b1d0e?text=DA" alt="Damas"> Jugar Damas</button>
+        </div>
+    </div>
+    <!-- Main Chess Container -->
+    <div class="container">
+        <img id="logo" src="https://placehold.co/60x60/d4af37/2b1d0e?text=RK" alt="Logo Rey">
+        <div class="title-container">
+            <h1>PeonKinGame</h1>
+            <span class="version">1.3</span>
+        </div>
+        <div id="room-selection">
+            <h2>Unirse a una Sala</h2>
+            <input id="room-id" type="text" placeholder="ID de la sala">
+            <select id="timer-select"><option value="0">Sin temporizador</option><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option></select>
+            <input id="color-select" type="color" value="#FFFFFF">
+            <button onclick="joinRoom()">Unirse</button>
+            <button onclick="showBotConfigModal()">Jugar con Bot</button>
+            <button onclick="joinWaitlist()">Buscar Partida</button>
+            <button onclick="showThemeConfigModal()">Personalizar Tablero</button>
+        </div>
+        <div id="chessboard"></div>
+        <div id="timers"><p id="white-timer">Blancas: --:--</p><p id="black-timer">Negras: --:--</p></div>
+        <div id="chat"><h3>Chat de la Partida</h3><div id="chat-messages"></div><input id="chat-input" type="text" placeholder="Escribe un mensaje..."><button onclick="sendMessage()">Enviar</button><button id="record-audio" onclick="startRecording()">Grabar Audio</button><button id="stop-audio" onclick="stopRecording()" style="display: none;">Detener</button><button id="start-video" onclick="startVideoCall()">Iniciar Video</button><button id="stop-video" onclick="stopVideoCall()" style="display: none;">Detener Video</button></div>
+        <video id="local-video" autoplay muted></video>
+        <video id="remote-video" autoplay></video>
+        <div id="game-buttons">
+            <!-- Game Save/Load Buttons - Now Linked to Firestore Logic -->
+            <button onclick="saveGame()">Guardar Partida</button>
+            <button onclick="loadSavedGames()">Cargar Partida</button>
+            <button onclick="resignGame()">Abandonar</button>
+            <button onclick="goBack()">Volver</button>
+        </div>
+        <!-- Saved Games List -->
+        <div id="saved-games">
+            <p>Partidas Guardadas:</p>
+        </div>
+        <!-- Modals (Kept as stubs) -->
+        <div id="promotion-modal"><h3>Promoción de Peón</h3><button onclick="selectPromotion('q')">♛</button><button onclick="selectPromotion('r')">♜</button><button onclick="selectPromotion('b')">♝</button><button onclick="selectPromotion('n')">♞</button></div>
+        <div id="bot-config-modal"><h2>Configurar Partida con Bot</h2><label for="bot-timer-select">Temporizador:</label><select id="bot-timer-select"><option value="0">Sin temporizador</option><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option></select><label for="bot-difficulty-select">Dificultad:</label><select id="bot-difficulty-select"><option value="easy">Fácil</option><option value="medium">Medio</option><option value="hard">Difícil</option></select><label for="bot-player-color-select">Color:</label><select id="bot-player-color-select"><option value="white">Blancas</option><option value="black">Negras</option></select><div class="button-container"><button onclick="startBotGame()">Jugar</button><button onclick="showThemeConfigModal()">Personalizar</button><button onclick="closeBotConfigModal()">Volver</button></div></div>
+        <div id="theme-config-modal"><h2>Personalizar Tablero y Piezas</h2><label for="board-color-select">Color del Tablero:</label><select id="board-color-select"><option value="brown">Marrón/Beige</option><option value="green">Verde/Blanco</option><option value="blue">Azul/Gris</option></select><label for="piece-color-select">Color de las Piezas:</label><select id="piece-color-select"><option value="white-black">Blanco/Negro</option><option value="gold-silver">Dorado/Plateado</option><option value="red-blue">Rojo/Azul</option></select><label for="piece-style-select">Estilo de las Piezas:</label><select id="piece-style-select"><option value="standard">Estándar</option><option value="merida">Merida</option><option value="alpha">Alpha</option></select><div class="button-container"><button onclick="applyTheme()">Aplicar</button><button onclick="closeThemeConfigModal()">Cerrar</button></div></div>
+        <div id="global-chat-container"><h3>Chat Global</h3><div id="global-chat-messages"></div><input id="global-chat-input" type="text" placeholder="Escribe un mensaje..."><button id="global-chat-send" onclick="sendGlobalChatMessage()">Enviar</button><button id="record-global-audio" onclick="startGlobalRecording()">Grabar Audio</button><button id="stop-global-audio" onclick="stopGlobalRecording()" style="display: none;">Detener</button></div>
+    </div>
+    <!-- Checkers/Damas Stub -->
+    <div class="checkers-container">
+        <img id="logo" src="https://placehold.co/60x60/d4af37/2b1d0e?text=DA" alt="Logo Reina">
+        <div class="title-container"><h1>PeonKinGame</h1><span class="version">1.3</span></div>
+        <p>Estamos desarrollando Damas, próximamente podrás jugar 🔴👑⚫</p>
+        <button onclick="goBackToGameSelection()">Volver</button>
+    </div>
+    <!-- Online Player/User Info -->
+    <div id="online-players"><h3>Jugadores en Línea</h3></div>
+    <div id="waitlist"><h2>Buscar Partida</h2><div id="waitlist-players"></div><button onclick="goBackFromWaitlist()">Volver</button></div>
+    <div id="private-chat"><h2>Chat Privado</h2><div id="private-chat-messages"></div><input id="private-chat-input" type="text" placeholder="Escribe un mensaje..."><button onclick="sendPrivateMessage()">Enviar</button><button onclick="acceptConditions()">Aceptar Condiciones</button><button onclick="goBackFromPrivateChat()">Volver</button></div>
+    <div id="user-info">
+        <p id="neig-balance">10000 <img src="https://placehold.co/20x20/d4af37/2b1d0e?text=N" alt="Neig"></p>
+        <p id="elo-level">ELO: 0 (Nivel 0)</p>
+        <button onclick="logout()">Cerrar Sesión</button>
+        <p id="user-id-display" style="font-size:0.7em; margin-top: 10px;"></p>
+    </div>
+
+    <!-- Firebase and Application Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let auth;
+        let userId = 'loading';
+        let isAuthReady = false;
+
+        // --- MOCK GAME STATE & UTILITIES ---
+        let currentGameState = {
+            fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            playerColor: 'white',
+            room: 'offline-bot-game',
+            timerWhite: 600, // seconds
+            timerBlack: 600, // seconds
+            lastMove: null,
+            players: { white: 'User1', black: 'Bot' }
+        };
+
+        const MESSAGE_BOX = document.getElementById('message-box');
+        
+        /** Shows a temporary success message. */
+        function showSuccessMessage(message) {
+            MESSAGE_BOX.textContent = message;
+            MESSAGE_BOX.className = 'success';
+            MESSAGE_BOX.style.opacity = '1';
+            setTimeout(() => {
+                MESSAGE_BOX.style.opacity = '0';
+            }, 3000);
+        }
+
+        /** Shows a temporary error message. */
+        function showErrorMessage(message) {
+            MESSAGE_BOX.textContent = message;
+            MESSAGE_BOX.className = 'error-msg';
+            MESSAGE_BOX.style.opacity = '1';
+            setTimeout(() => {
+                MESSAGE_BOX.style.opacity = '0';
+            }, 4000);
+        }
+        
+        /** Returns the private collection path for the current user's saved games. */
+        function getUserSavesPath(uid) {
+            return `artifacts/${appId}/users/${uid}/saved_games`;
+        }
+
+        // --- FIREBASE INITIALIZATION & AUTHENTICATION ---
+        function initFirebase() {
+            if (!firebaseConfig) {
+                showErrorMessage("Error: Configuración de Firebase no disponible.");
+                return;
+            }
+
+            try {
+                // setLogLevel('debug'); // Enable for debugging
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            } catch (e) {
+                console.error("Firebase init failed:", e);
+                showErrorMessage("Error al inicializar Firebase. Consulta la consola.");
+            }
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('user-id-display').textContent = `ID: ${userId}`;
+                    isAuthReady = true;
+                    document.getElementById('loading-screen').style.display = 'none';
+                    document.getElementById('game-selection').style.display = 'flex';
+                } else {
+                    // Sign in if token is available, otherwise sign in anonymously
+                    try {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (e) {
+                        console.error("Authentication failed:", e);
+                        showErrorMessage("Error de autenticación. Intentando de nuevo anónimamente.");
+                        await signInAnonymously(auth);
+                    }
+                }
+            });
+        }
+
+        // --- GAME SAVE/LOAD LOGIC (Firestore) ---
+
+        window.saveGame = async function() {
+            if (!isAuthReady) {
+                showErrorMessage("El sistema de autenticación aún no está listo.");
+                return;
+            }
+            if (currentGameState.room.includes('offline')) {
+                showErrorMessage("No se pueden guardar partidas de práctica con Bot.");
+                return;
+            }
+
+            const gameName = prompt("Ingresa un nombre para guardar la partida:");
+            if (!gameName) {
+                return;
+            }
+
+            const saveRef = collection(db, getUserSavesPath(userId));
+            const saveData = {
+                name: gameName,
+                fen: currentGameState.fen,
+                timestamp: serverTimestamp(),
+                timers: {
+                    white: currentGameState.timerWhite,
+                    black: currentGameState.timerBlack
+                },
+                players: currentGameState.players,
+                lastMove: currentGameState.lastMove
+            };
+
+            try {
+                // Add a new document to the user's collection
+                const newDoc = await addDoc(saveRef, saveData);
+                showSuccessMessage(`Partida "${gameName}" guardada con éxito (ID: ${newDoc.id}).`);
+                document.getElementById('saved-games').style.display = 'none'; // Hide list after saving
+            } catch (error) {
+                console.error("Error al guardar la partida:", error);
+                showErrorMessage("Error al guardar la partida. Inténtalo de nuevo.");
+            }
+        }
+
+        window.loadSavedGames = async function() {
+            if (!isAuthReady) {
+                showErrorMessage("El sistema de autenticación aún no está listo.");
+                return;
+            }
+
+            const savedGamesDiv = document.getElementById('saved-games');
+            savedGamesDiv.innerHTML = '<h3>Partidas Guardadas</h3><p style="color:#d4af37; font-size: 0.8em;">Cargando...</p>';
+            savedGamesDiv.style.display = 'block';
+
+            try {
+                const q = collection(db, getUserSavesPath(userId));
+                const snapshot = await getDocs(q);
+
+                savedGamesDiv.innerHTML = '<h3>Partidas Guardadas</h3>';
+
+                if (snapshot.empty) {
+                    savedGamesDiv.innerHTML += '<p style="color:#d4af37;">No hay partidas guardadas.</p>';
+                    return;
+                }
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const timestamp = data.timestamp ? new Date(data.timestamp.seconds * 1000).toLocaleString() : 'N/A';
+                    const button = document.createElement('button');
+                    button.innerHTML = `<strong>${data.name}</strong><br><small>(${timestamp})</small>`;
+                    button.onclick = () => window.loadGame(doc.id, data);
+                    
+                    const deleteButton = document.createElement('span');
+                    deleteButton.textContent = '❌';
+                    deleteButton.style.float = 'right';
+                    deleteButton.style.paddingLeft = '10px';
+                    deleteButton.onclick = (e) => {
+                        e.stopPropagation(); // Prevent loading the game when clicking delete
+                        window.deleteGame(doc.id, data.name);
+                    };
+                    button.appendChild(deleteButton);
+                    savedGamesDiv.appendChild(button);
+                });
+
+            } catch (error) {
+                console.error("Error al cargar partidas:", error);
+                showErrorMessage("Error al cargar partidas guardadas.");
+            }
+        }
+
+        window.loadGame = async function(gameId, data) {
+            // This function would normally call a function in the game engine (like `loadFromFEN(data.fen)`)
+            // For now, we update the mock state and provide feedback.
+            currentGameState = {
+                fen: data.fen,
+                playerColor: data.fen.split(' ')[1] === 'w' ? 'white' : 'black',
+                room: 'loaded-game-' + gameId,
+                timerWhite: data.timers.white,
+                timerBlack: data.timers.black,
+                lastMove: data.lastMove,
+                players: data.players
+            };
+
+            // Mock UI updates
+            document.getElementById('chessboard').style.display = 'grid';
+            document.getElementById('room-selection').style.display = 'none';
+            document.getElementById('game-buttons').style.display = 'flex';
+            document.getElementById('saved-games').style.display = 'none';
+
+            // Placeholder for rendering the board based on FEN
+            renderBoard(currentGameState.fen); 
+            
+            showSuccessMessage(`Partida "${data.name}" cargada con éxito. Turno para ${currentGameState.playerColor === 'w' ? 'Blancas' : 'Negras'}.`);
+        }
+        
+        window.deleteGame = async function(gameId, gameName) {
+            if (!confirm(`¿Estás seguro de que deseas eliminar la partida "${gameName}"?`)) {
+                return;
+            }
+            try {
+                const docRef = doc(db, getUserSavesPath(userId), gameId);
+                await deleteDoc(docRef);
+                showSuccessMessage(`Partida "${gameName}" eliminada.`);
+                window.loadSavedGames(); // Reload the list
+            } catch (error) {
+                console.error("Error al eliminar la partida:", error);
+                showErrorMessage("Error al eliminar la partida.");
+            }
+        }
+
+        // --- STUB/PLACEHOLDER FUNCTIONS (For UX) ---
+
+        window.renderBoard = function(fen) {
+            const board = document.getElementById('chessboard');
+            board.innerHTML = '';
+            const boardColor = localStorage.getItem('boardColor') || 'brown';
+            
+            // Simple placeholder render to show something
+            for(let i = 0; i < 64; i++) {
+                const square = document.createElement('div');
+                const isWhite = (Math.floor(i / 8) + i) % 2 === 0;
+                square.className = `square ${isWhite ? 'white-' + boardColor : 'black-' + boardColor}`;
+                square.innerHTML = i < 16 || i > 47 ? '<span class="piece-standard">♟</span>' : '';
+                board.appendChild(square);
+            }
+        }
+
+        window.setGameType = function(game) {
+            if (game === 'chess') {
+                document.getElementById('game-selection').style.display = 'none';
+                document.querySelector('.container').style.display = 'flex';
+                renderBoard(currentGameState.fen); // Render initial board on selection
+            } else if (game === 'checkers') {
+                document.getElementById('game-selection').style.display = 'none';
+                document.querySelector('.checkers-container').style.display = 'flex';
+            }
+        }
+
+        window.joinRoom = function() { showErrorMessage("Funcionalidad 'Unirse a Sala' pendiente de implementación."); }
+        window.startBotGame = function() { showErrorMessage("Funcionalidad 'Jugar con Bot' pendiente de implementación."); }
+        window.joinWaitlist = function() { showErrorMessage("Funcionalidad 'Buscar Partida' pendiente de implementación."); }
+        window.resignGame = function() { showErrorMessage("Funcionalidad 'Abandonar' pendiente de implementación."); }
+        window.goBack = function() {
+             document.getElementById('chessboard').style.display = 'none';
+             document.getElementById('game-buttons').style.display = 'none';
+             document.getElementById('saved-games').style.display = 'none';
+             document.getElementById('room-selection').style.display = 'block';
+        }
+        window.showBotConfigModal = function() { document.getElementById('bot-config-modal').style.display = 'block'; }
+        window.closeBotConfigModal = function() { document.getElementById('bot-config-modal').style.display = 'none'; }
+        window.showThemeConfigModal = function() { document.getElementById('theme-config-modal').style.display = 'block'; }
+        window.closeThemeConfigModal = function() { document.getElementById('theme-config-modal').style.display = 'none'; }
+        window.applyTheme = function() {
+            // Apply theme logic stub
+            localStorage.setItem('boardColor', document.getElementById('board-color-select').value);
+            localStorage.setItem('pieceColor', document.getElementById('piece-color-select').value);
+            localStorage.setItem('pieceStyle', document.getElementById('piece-style-select').value);
+            renderBoard(currentGameState.fen);
+            closeThemeConfigModal();
+            showSuccessMessage("Temas aplicados. ¡A jugar!");
+        }
+        window.goBackToGameSelection = function() {
+            document.querySelector('.checkers-container').style.display = 'none';
+            document.getElementById('game-selection').style.display = 'flex';
+        }
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            initFirebase();
+        });
+    </script>
+</body>
+</html>
+
