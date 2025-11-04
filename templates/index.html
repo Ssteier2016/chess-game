@@ -7,7 +7,7 @@
     <!-- Placeholder for icon and manifest, replaced with meta tags for single file -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght[email protected]&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
     <style>
         /* General Styles */
         body {
@@ -434,9 +434,9 @@
         <video id="local-video" autoplay muted></video>
         <video id="remote-video" autoplay></video>
         <div id="game-buttons">
-            <!-- Game Save/Load Buttons - Now Linked to Firestore Logic -->
-            <button onclick="saveGame()">Guardar Partida</button>
-            <button onclick="loadSavedGames()">Cargar Partida</button>
+            <!-- Game Save/Load Buttons - Now Linked to Local Storage Logic -->
+            <button onclick="saveGame()">Guardar Partida Local</button>
+            <button onclick="loadSavedGames()">Cargar Partida Local</button>
             <button onclick="resignGame()">Abandonar</button>
             <button onclick="goBack()">Volver</button>
         </div>
@@ -465,24 +465,12 @@
         <p id="neig-balance">10000 <img src="https://placehold.co/20x20/d4af37/2b1d0e?text=N" alt="Neig"></p>
         <p id="elo-level">ELO: 0 (Nivel 0)</p>
         <button onclick="logout()">Cerrar Sesión</button>
-        <p id="user-id-display" style="font-size:0.7em; margin-top: 10px;"></p>
+        <p id="user-id-display" style="font-size:0.7em; margin-top: 10px;">ID: MOCK_USER_ID (Local)</p>
     </div>
 
-    <!-- Firebase and Application Logic -->
+    <!-- Application Logic (Now using Local Storage) -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global variables provided by the environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        let db;
-        let auth;
-        let userId = 'loading';
-        let isAuthReady = false;
+        // Se han eliminado las importaciones de Firebase.
 
         // --- MOCK GAME STATE & UTILITIES ---
         let currentGameState = {
@@ -517,59 +505,18 @@
             }, 4000);
         }
         
-        /** Returns the private collection path for the current user's saved games. */
-        function getUserSavesPath(uid) {
-            return `artifacts/${appId}/users/${uid}/saved_games`;
+        // --- LOCAL STORAGE SAVE/LOAD LOGIC ---
+
+        /** Initializes the application (replaces Firebase init). */
+        function initApp() {
+            // Mock authentication success
+            document.getElementById('user-id-display').textContent = `ID: MOCK_USER_ID (Local)`;
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('game-selection').style.display = 'flex';
+            showSuccessMessage("Carga local completada. La persistencia de partidas es local.");
         }
-
-        // --- FIREBASE INITIALIZATION & AUTHENTICATION ---
-        function initFirebase() {
-            if (!firebaseConfig) {
-                showErrorMessage("Error: Configuración de Firebase no disponible.");
-                return;
-            }
-
-            try {
-                // setLogLevel('debug'); // Enable for debugging
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-            } catch (e) {
-                console.error("Firebase init failed:", e);
-                showErrorMessage("Error al inicializar Firebase. Consulta la consola.");
-            }
-
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    userId = user.uid;
-                    document.getElementById('user-id-display').textContent = `ID: ${userId}`;
-                    isAuthReady = true;
-                    document.getElementById('loading-screen').style.display = 'none';
-                    document.getElementById('game-selection').style.display = 'flex';
-                } else {
-                    // Sign in if token is available, otherwise sign in anonymously
-                    try {
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (e) {
-                        console.error("Authentication failed:", e);
-                        showErrorMessage("Error de autenticación. Intentando de nuevo anónimamente.");
-                        await signInAnonymously(auth);
-                    }
-                }
-            });
-        }
-
-        // --- GAME SAVE/LOAD LOGIC (Firestore) ---
 
         window.saveGame = async function() {
-            if (!isAuthReady) {
-                showErrorMessage("El sistema de autenticación aún no está listo.");
-                return;
-            }
             if (currentGameState.room.includes('offline')) {
                 showErrorMessage("No se pueden guardar partidas de práctica con Bot.");
                 return;
@@ -577,14 +524,19 @@
 
             const gameName = prompt("Ingresa un nombre para guardar la partida:");
             if (!gameName) {
+                showErrorMessage("Operación de guardado cancelada.");
                 return;
             }
 
-            const saveRef = collection(db, getUserSavesPath(userId));
-            const saveData = {
+            // 1. Load existing games
+            const savedGames = JSON.parse(localStorage.getItem('saved_games') || '[]');
+            
+            // 2. Create new save object
+            const newGame = {
+                id: Date.now().toString(), // Use timestamp as unique ID
                 name: gameName,
                 fen: currentGameState.fen,
-                timestamp: serverTimestamp(),
+                timestamp: new Date().toISOString(),
                 timers: {
                     white: currentGameState.timerWhite,
                     black: currentGameState.timerBlack
@@ -593,77 +545,61 @@
                 lastMove: currentGameState.lastMove
             };
 
-            try {
-                // Add a new document to the user's collection
-                const newDoc = await addDoc(saveRef, saveData);
-                showSuccessMessage(`Partida "${gameName}" guardada con éxito (ID: ${newDoc.id}).`);
-                document.getElementById('saved-games').style.display = 'none'; // Hide list after saving
-            } catch (error) {
-                console.error("Error al guardar la partida:", error);
-                showErrorMessage("Error al guardar la partida. Inténtalo de nuevo.");
-            }
+            // 3. Add to array and save back to localStorage
+            savedGames.push(newGame);
+            localStorage.setItem('saved_games', JSON.stringify(savedGames));
+
+            showSuccessMessage(`Partida "${gameName}" guardada localmente.`);
+            document.getElementById('saved-games').style.display = 'none'; // Hide list after saving
         }
 
         window.loadSavedGames = async function() {
-            if (!isAuthReady) {
-                showErrorMessage("El sistema de autenticación aún no está listo.");
+            const savedGamesDiv = document.getElementById('saved-games');
+            savedGamesDiv.innerHTML = '<h3>Partidas Guardadas (Local)</h3><p style="color:#d4af37; font-size: 0.8em;">Cargando...</p>';
+            savedGamesDiv.style.display = 'block';
+            savedGamesDiv.scrollTop = 0; // Reset scroll
+
+            const savedGames = JSON.parse(localStorage.getItem('saved_games') || '[]');
+
+            savedGamesDiv.innerHTML = '<h3>Partidas Guardadas (Local)</h3>';
+
+            if (savedGames.length === 0) {
+                savedGamesDiv.innerHTML += '<p style="color:#d4af37;">No hay partidas guardadas localmente.</p>';
                 return;
             }
 
-            const savedGamesDiv = document.getElementById('saved-games');
-            savedGamesDiv.innerHTML = '<h3>Partidas Guardadas</h3><p style="color:#d4af37; font-size: 0.8em;">Cargando...</p>';
-            savedGamesDiv.style.display = 'block';
-
-            try {
-                const q = collection(db, getUserSavesPath(userId));
-                const snapshot = await getDocs(q);
-
-                savedGamesDiv.innerHTML = '<h3>Partidas Guardadas</h3>';
-
-                if (snapshot.empty) {
-                    savedGamesDiv.innerHTML += '<p style="color:#d4af37;">No hay partidas guardadas.</p>';
-                    return;
-                }
-
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const timestamp = data.timestamp ? new Date(data.timestamp.seconds * 1000).toLocaleString() : 'N/A';
-                    const button = document.createElement('button');
-                    button.innerHTML = `<strong>${data.name}</strong><br><small>(${timestamp})</small>`;
-                    button.onclick = () => window.loadGame(doc.id, data);
-                    
-                    const deleteButton = document.createElement('span');
-                    deleteButton.textContent = '❌';
-                    deleteButton.style.float = 'right';
-                    deleteButton.style.paddingLeft = '10px';
-                    deleteButton.onclick = (e) => {
-                        e.stopPropagation(); // Prevent loading the game when clicking delete
-                        window.deleteGame(doc.id, data.name);
-                    };
-                    button.appendChild(deleteButton);
-                    savedGamesDiv.appendChild(button);
-                });
-
-            } catch (error) {
-                console.error("Error al cargar partidas:", error);
-                showErrorMessage("Error al cargar partidas guardadas.");
-            }
+            savedGames.forEach(data => {
+                const timestamp = new Date(data.timestamp).toLocaleString();
+                const button = document.createElement('button');
+                button.innerHTML = `<strong>${data.name}</strong><br><small>(${timestamp})</small>`;
+                button.onclick = () => window.loadGame(data);
+                
+                const deleteButton = document.createElement('span');
+                deleteButton.textContent = '❌';
+                deleteButton.style.float = 'right';
+                deleteButton.style.paddingLeft = '10px';
+                deleteButton.onclick = (e) => {
+                    e.stopPropagation(); // Prevent loading the game when clicking delete
+                    window.deleteGame(data.id, data.name);
+                };
+                button.appendChild(deleteButton);
+                savedGamesDiv.appendChild(button);
+            });
         }
 
-        window.loadGame = async function(gameId, data) {
-            // This function would normally call a function in the game engine (like `loadFromFEN(data.fen)`)
-            // For now, we update the mock state and provide feedback.
+        window.loadGame = async function(data) {
+            // Update the mock state 
             currentGameState = {
                 fen: data.fen,
                 playerColor: data.fen.split(' ')[1] === 'w' ? 'white' : 'black',
-                room: 'loaded-game-' + gameId,
+                room: 'loaded-game-' + data.id,
                 timerWhite: data.timers.white,
                 timerBlack: data.timers.black,
                 lastMove: data.lastMove,
                 players: data.players
             };
 
-            // Mock UI updates
+            // UI updates
             document.getElementById('chessboard').style.display = 'grid';
             document.getElementById('room-selection').style.display = 'none';
             document.getElementById('game-buttons').style.display = 'flex';
@@ -676,17 +612,24 @@
         }
         
         window.deleteGame = async function(gameId, gameName) {
-            if (!confirm(`¿Estás seguro de que deseas eliminar la partida "${gameName}"?`)) {
+            // Usamos window.confirm como alternativa simple a un modal de confirmación, 
+            // aunque se prefiere un modal personalizado en producción.
+            if (!window.confirm(`¿Estás seguro de que deseas eliminar la partida "${gameName}"? Esta acción es irreversible.`)) {
                 return;
             }
-            try {
-                const docRef = doc(db, getUserSavesPath(userId), gameId);
-                await deleteDoc(docRef);
+
+            let savedGames = JSON.parse(localStorage.getItem('saved_games') || '[]');
+            const initialLength = savedGames.length;
+            
+            // Filter out the game to delete
+            savedGames = savedGames.filter(game => game.id !== gameId);
+            
+            if (savedGames.length < initialLength) {
+                localStorage.setItem('saved_games', JSON.stringify(savedGames));
                 showSuccessMessage(`Partida "${gameName}" eliminada.`);
                 window.loadSavedGames(); // Reload the list
-            } catch (error) {
-                console.error("Error al eliminar la partida:", error);
-                showErrorMessage("Error al eliminar la partida.");
+            } else {
+                showErrorMessage("Error: Partida no encontrada para eliminar.");
             }
         }
 
@@ -745,10 +688,14 @@
             document.querySelector('.checkers-container').style.display = 'none';
             document.getElementById('game-selection').style.display = 'flex';
         }
+        window.logout = function() {
+            showSuccessMessage("Sesión cerrada (simulada).");
+            // Aquí podrías redirigir o recargar la página para volver a la pantalla de login/inicio.
+        }
 
         // Initial setup
         document.addEventListener('DOMContentLoaded', () => {
-            initFirebase();
+            initApp();
         });
     </script>
 </body>
